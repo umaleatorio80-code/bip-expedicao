@@ -4,99 +4,148 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bip Expedição</title>
+  <meta name="theme-color" content="#111714">
+  <title>BIP Expedição</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <main class="container">
-    <header>
-      <h1>Bip Expedição</h1>
-      <p>Controle de produtos no barracão</p>
+    <header class="topo">
+      <div class="marca">
+        <div class="icone-marca">BIP</div>
+        <div>
+          <p class="sobretitulo">CONTROLE LOGÍSTICO</p>
+          <h1>Expedição</h1>
+          <p class="subtitulo">Controle de volumes do barracão</p>
+        </div>
+      </div>
+      <div class="status-sistema">
+        <span class="ponto-verde"></span>
+        Sistema local
+      </div>
     </header>
 
     <section class="resumo">
-      <div class="card">
-        <span>Pendentes</span>
+      <div class="card card-pendente">
+        <span class="card-titulo">VOLUMES PENDENTES</span>
         <strong id="pendentes">0</strong>
+        <span class="card-legenda">No barracão</span>
       </div>
-      <div class="card">
-        <span>Carregados</span>
+      <div class="card card-carregado">
+        <span class="card-titulo">VOLUMES CARREGADOS</span>
         <strong id="carregados">0</strong>
+        <span class="card-legenda">Saída confirmada</span>
       </div>
     </section>
 
-    <section class="painel">
-      <h2>Registrar movimentação</h2>
+    <section class="painel painel-operacao">
+      <div class="titulo-secao">
+        <span class="numero-secao">01</span>
+        <div>
+          <h2>Configurar operação</h2>
+          <p>Selecione o tipo de movimentação antes de bipar.</p>
+        </div>
+      </div>
 
-      <label for="modo">Operação</label>
+      <label for="modo">Tipo de operação</label>
       <select id="modo">
         <option value="entrada">Entrada — separar produto</option>
         <option value="saida">Saída — carregar produto</option>
       </select>
-<label for="marketplace">Marketplace / Transportadora</label>
-<select id="marketplace">
-  <option value="Shopee">Shopee</option>
-  <option value="Mercado Livre">Mercado Livre</option>
-  <option value="Magalu">Magalu</option>
-  <option value="J&T - TikTok Shop">J&T - TikTok Shop</option>
-  <option value="J&T - Temu">J&T - Temu</option>
-  <option value="Amazon">Amazon</option>
-</select>
 
-<label for="lote">Identificação do lote</label>
-<input
-  id="lote"
-  type="text"
-  placeholder="Ex.: Carreta 01 - manhã"
-  autocomplete="off"
->
-<p class="ajuda">
-  Use a mesma identificação para todas as peças do mesmo lote.
-</p>
+      <label for="marketplace">Marketplace / transportadora</label>
+      <select id="marketplace">
+        <option value="Shopee">Shopee</option>
+        <option value="Mercado Livre">Mercado Livre</option>
+        <option value="Magalu">Magalu</option>
+        <option value="J&T - TikTok Shop">J&T - TikTok Shop</option>
+        <option value="J&T - Temu">J&T - Temu</option>
+        <option value="Amazon">Amazon</option>
+      </select>
 
-
-      <label for="codigo">Código da etiqueta Shopee</label>
+      <label for="lote">Identificação do lote</label>
       <input
-        id="codigo"
+        id="lote"
         type="text"
-        placeholder="Bipe ou digite o código"
+        placeholder="Ex.: Carreta 01 - manhã"
         autocomplete="off"
       >
-<button type="button" id="abrirCamera">
-  📷 Ler etiqueta com a câmera
-</button>
-
-<div id="areaCamera" hidden>
-  <div id="leitor-camera"></div>
-  <button type="button" id="fecharCamera">
-    Fechar câmera
-  </button>
-</div>
-
-
-      <button id="registrar">Registrar bip</button>
-      <p id="mensagem" role="status"></p>
+      <p class="ajuda">Use a mesma identificação para todas as peças do mesmo lote.</p>
     </section>
 
-    <section class="painel">
-      <h2>Volumes pendentes</h2>
-<button type="button" id="baixarLote">
-  Confirmar saída do lote inteiro
-</button>
+    <section class="painel painel-leitura">
+      <div class="titulo-secao">
+        <span class="numero-secao">02</span>
+        <div>
+          <h2>Leitura de etiquetas</h2>
+          <p>Aponte a câmera para o código de barras.</p>
+        </div>
+      </div>
 
+      <div class="operacao-atual">
+        <span class="etiqueta-pequena">OPERAÇÃO SELECIONADA</span>
+        <strong id="operacaoAtual">ENTRADA DE VOLUMES</strong>
+        <span id="canalAtual">Shopee</span>
+      </div>
+
+      <button type="button" id="abrirCamera" class="btn-camera">
+        <span class="camera-icone">▣</span>
+        <span>ATIVAR CÂMERA</span>
+      </button>
+
+      <div id="areaCamera" hidden>
+        <div class="instrucao-camera">
+          <span class="ponto-verde"></span>
+          Câmera ativa — pronta para ler
+        </div>
+        <div id="leitor-camera"></div>
+        <button type="button" id="fecharCamera" class="btn-secundario">
+          Pausar câmera
+        </button>
+      </div>
+
+      <div id="mensagem" class="mensagem" role="status" aria-live="polite">
+        Configure a operação e o lote para começar.
+      </div>
+
+      <div class="aviso-automatico">
+        <span>↳</span>
+        A leitura registra automaticamente. Não precisa apertar outro botão.
+      </div>
+    </section>
+
+    <section class="painel painel-lista">
+      <div class="titulo-secao">
+        <span class="numero-secao">03</span>
+        <div>
+          <h2>Controle de volumes</h2>
+          <p>Consulte os registros e confirme as saídas.</p>
+        </div>
+      </div>
+
+      <button type="button" id="baixarLote" class="btn-lote">
+        Confirmar saída do lote inteiro
+      </button>
+
+      <label for="busca">Pesquisar registros</label>
       <input
         id="busca"
         type="search"
-        placeholder="Pesquisar código..."
+        placeholder="Código, lote ou marketplace..."
+        autocomplete="off"
       >
 
       <ul id="lista"></ul>
+      <p id="listaVazia" class="lista-vazia" hidden>Nenhum registro encontrado.</p>
     </section>
+
+    <footer>
+      <span class="ponto-verde"></span>
+      BIP EXPEDIÇÃO · CONTROLE LOCAL
+    </footer>
   </main>
 
-  
-<script src="https://unpkg.com/html5-qrcode"></script>
-<script src="script.js"></script>
-
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="script.js"></script>
 </body>
 </html>
