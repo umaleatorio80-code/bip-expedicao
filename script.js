@@ -1,151 +1,375 @@
 
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#111714">
-  <title>BIP Expedição</title>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <main class="container">
-    <header class="topo">
-      <div class="marca">
-        <div class="icone-marca">BIP</div>
-        <div>
-          <p class="sobretitulo">CONTROLE LOGÍSTICO</p>
-          <h1>Expedição</h1>
-          <p class="subtitulo">Controle de volumes do barracão</p>
-        </div>
-      </div>
-      <div class="status-sistema">
-        <span class="ponto-verde"></span>
-        Sistema local
-      </div>
-    </header>
+const modo = document.getElementById("modo");
+const marketplace = document.getElementById("marketplace");
+const lote = document.getElementById("lote");
+const mensagem = document.getElementById("mensagem");
+const lista = document.getElementById("lista");
+const busca = document.getElementById("busca");
+const abrirCamera = document.getElementById("abrirCamera");
+const fecharCamera = document.getElementById("fecharCamera");
+const areaCamera = document.getElementById("areaCamera");
+const baixarLote = document.getElementById("baixarLote");
+const operacaoAtual = document.getElementById("operacaoAtual");
+const canalAtual = document.getElementById("canalAtual");
+const listaVazia = document.getElementById("listaVazia");
 
-    <section class="resumo">
-      <div class="card card-pendente">
-        <span class="card-titulo">VOLUMES PENDENTES</span>
-        <strong id="pendentes">0</strong>
-        <span class="card-legenda">No barracão</span>
-      </div>
-      <div class="card card-carregado">
-        <span class="card-titulo">VOLUMES CARREGADOS</span>
-        <strong id="carregados">0</strong>
-        <span class="card-legenda">Saída confirmada</span>
-      </div>
-    </section>
+let volumes = JSON.parse(localStorage.getItem("bipVolumes") || "[]");
+let scanner = null;
+let iniciandoCamera = false;
+let processandoLeitura = false;
 
-    <section class="painel painel-operacao">
-      <div class="titulo-secao">
-        <span class="numero-secao">01</span>
-        <div>
-          <h2>Configurar operação</h2>
-          <p>Selecione o tipo de movimentação antes de bipar.</p>
-        </div>
-      </div>
+// Impede que o mesmo código seja processado repetidamente
+// em vários quadros consecutivos da câmera.
+const leiturasRecentes = new Map();
+const INTERVALO_ANTI_REPETICAO = 2500;
 
-      <label for="modo">Tipo de operação</label>
-      <select id="modo">
-        <option value="entrada">Entrada — separar produto</option>
-        <option value="saida">Saída — carregar produto</option>
-      </select>
+// Compatibilidade com os registros da versão anterior.
+volumes = volumes.map(v => ({
+  ...v,
+  marketplace: v.marketplace || "Sem categoria",
+  lote: v.lote || "Lote antigo"
+}));
 
-      <label for="marketplace">Marketplace / transportadora</label>
-      <select id="marketplace">
-        <option value="Shopee">Shopee</option>
-        <option value="Mercado Livre">Mercado Livre</option>
-        <option value="Magalu">Magalu</option>
-        <option value="J&T - TikTok Shop">J&T - TikTok Shop</option>
-        <option value="J&T - Temu">J&T - Temu</option>
-        <option value="Amazon">Amazon</option>
-      </select>
+function salvar() {
+  localStorage.setItem("bipVolumes", JSON.stringify(volumes));
+}
 
-      <label for="lote">Identificação do lote</label>
-      <input
-        id="lote"
-        type="text"
-        placeholder="Ex.: Carreta 01 - manhã"
-        autocomplete="off"
-      >
-      <p class="ajuda">Use a mesma identificação para todas as peças do mesmo lote.</p>
-    </section>
+function avisar(texto, tipo = "neutro") {
+  mensagem.textContent = texto;
+  mensagem.className = "mensagem";
 
-    <section class="painel painel-leitura">
-      <div class="titulo-secao">
-        <span class="numero-secao">02</span>
-        <div>
-          <h2>Leitura de etiquetas</h2>
-          <p>Aponte a câmera para o código de barras.</p>
-        </div>
-      </div>
+  if (tipo === "sucesso") {
+    mensagem.classList.add("sucesso");
+  } else if (tipo === "erro") {
+    mensagem.classList.add("erro");
+  }
+}
 
-      <div class="operacao-atual">
-        <span class="etiqueta-pequena">OPERAÇÃO SELECIONADA</span>
-        <strong id="operacaoAtual">ENTRADA DE VOLUMES</strong>
-        <span id="canalAtual">Shopee</span>
-      </div>
+function atualizarOperacao() {
+  operacaoAtual.textContent = modo.value === "entrada"
+    ? "ENTRADA DE VOLUMES"
+    : "SAÍDA DE VOLUMES";
 
-      <button type="button" id="abrirCamera" class="btn-camera">
-        <span class="camera-icone">▣</span>
-        <span>ATIVAR CÂMERA</span>
-      </button>
+  canalAtual.textContent = marketplace.value;
 
-      <div id="areaCamera" hidden>
-        <div class="instrucao-camera">
-          <span class="ponto-verde"></span>
-          Câmera ativa — pronta para ler
-        </div>
-        <div id="leitor-camera"></div>
-        <button type="button" id="fecharCamera" class="btn-secundario">
-          Pausar câmera
-        </button>
-      </div>
+  operacaoAtual.style.color = modo.value === "entrada"
+    ? "#42e58b"
+    : "#f4b454";
+}
 
-      <div id="mensagem" class="mensagem" role="status" aria-live="polite">
-        Configure a operação e o lote para começar.
-      </div>
+function desenhar() {
+  document.getElementById("pendentes").textContent =
+    volumes.filter(v => v.status === "pendente").length;
 
-      <div class="aviso-automatico">
-        <span>↳</span>
-        A leitura registra automaticamente. Não precisa apertar outro botão.
-      </div>
-    </section>
+  document.getElementById("carregados").textContent =
+    volumes.filter(v => v.status === "carregado").length;
 
-    <section class="painel painel-lista">
-      <div class="titulo-secao">
-        <span class="numero-secao">03</span>
-        <div>
-          <h2>Controle de volumes</h2>
-          <p>Consulte os registros e confirme as saídas.</p>
-        </div>
-      </div>
+  const termo = busca.value.trim().toUpperCase();
+  lista.innerHTML = "";
 
-      <button type="button" id="baixarLote" class="btn-lote">
-        Confirmar saída do lote inteiro
-      </button>
+  const filtrados = volumes
+    .filter(v =>
+      v.codigo.toUpperCase().includes(termo) ||
+      v.lote.toUpperCase().includes(termo) ||
+      v.marketplace.toUpperCase().includes(termo)
+    )
+    .slice()
+    .reverse();
 
-      <label for="busca">Pesquisar registros</label>
-      <input
-        id="busca"
-        type="search"
-        placeholder="Código, lote ou marketplace..."
-        autocomplete="off"
-      >
+  listaVazia.hidden = filtrados.length > 0;
 
-      <ul id="lista"></ul>
-      <p id="listaVazia" class="lista-vazia" hidden>Nenhum registro encontrado.</p>
-    </section>
+  filtrados.forEach(volume => {
+    const item = document.createElement("li");
+    const info = document.createElement("div");
+    const detalhe = document.createElement("div");
+    const status = document.createElement("span");
+    const acoes = document.createElement("div");
+    const excluir = document.createElement("button");
 
-    <footer>
-      <span class="ponto-verde"></span>
-      BIP EXPEDIÇÃO · CONTROLE LOCAL
-    </footer>
-  </main>
+    info.className = "volume-info";
+    info.textContent = volume.codigo;
 
-  <script src="https://unpkg.com/html5-qrcode"></script>
-  <script src="script.js"></script>
-</body>
-</html>
+    detalhe.className = "volume-detalhe";
+    detalhe.textContent =
+      `${volume.marketplace} · Lote: ${volume.lote}`;
+
+    status.className = volume.status === "pendente"
+      ? "status status-pendente"
+      : "status status-carregado";
+
+    status.textContent = volume.status === "pendente"
+      ? "PENDENTE NO BARRACÃO"
+      : "CARREGADO";
+
+    excluir.type = "button";
+    excluir.className = "btn-excluir";
+    excluir.textContent = "Excluir registro";
+
+    excluir.addEventListener("click", () => {
+      const confirmar = confirm(
+        `Excluir o registro ${volume.codigo}?\n\n` +
+        "Isso removerá o registro deste navegador."
+      );
+
+      if (!confirmar) return;
+
+      volumes = volumes.filter(v => v.codigo !== volume.codigo);
+      salvar();
+      desenhar();
+      avisar("Registro excluído.", "sucesso");
+    });
+
+    acoes.className = "acoes-volume";
+    acoes.appendChild(excluir);
+
+    item.append(info, detalhe, status, acoes);
+    lista.appendChild(item);
+  });
+}
+
+function registrarCodigo(codigoLido) {
+  const valor = String(codigoLido || "").trim().toUpperCase();
+  const canal = marketplace.value;
+  const nomeLote = lote.value.trim();
+
+  if (!valor) {
+    avisar("Não foi possível ler o código. Tente novamente.", "erro");
+    return false;
+  }
+
+  if (!nomeLote) {
+    avisar("Informe a identificação do lote antes de bipar.", "erro");
+    lote.focus();
+    return false;
+  }
+
+  const existente = volumes.find(v => v.codigo === valor);
+
+  if (modo.value === "entrada") {
+    if (existente) {
+      avisar(
+        `ETIQUETA DUPLICADA: ${valor}. Nenhum novo registro foi criado.`,
+        "erro"
+      );
+      return false;
+    }
+
+    volumes.push({
+      codigo: valor,
+      marketplace: canal,
+      lote: nomeLote,
+      status: "pendente",
+      entrada: new Date().toISOString(),
+      saida: null
+    });
+
+    salvar();
+    desenhar();
+    avisar(`ENTRADA REGISTRADA · ${valor}`, "sucesso");
+    return true;
+  }
+
+  if (!existente) {
+    avisar(
+      `ETIQUETA NÃO ENCONTRADA: ${valor}. Registre a entrada primeiro.`,
+      "erro"
+    );
+    return false;
+  }
+
+  if (existente.status === "carregado") {
+    avisar(
+      `JÁ CARREGADO: ${valor}. Nenhuma alteração realizada.`,
+      "erro"
+    );
+    return false;
+  }
+
+  // A saída individual só baixa a etiqueta reconhecida.
+  existente.status = "carregado";
+  existente.saida = new Date().toISOString();
+
+  salvar();
+  desenhar();
+  avisar(`SAÍDA REGISTRADA · ${valor}`, "sucesso");
+  return true;
+}
+
+function processarLeitura(texto) {
+  const valor = String(texto || "").trim().toUpperCase();
+
+  if (!valor || processandoLeitura) return;
+
+  const agora = Date.now();
+  const ultimaLeitura = leiturasRecentes.get(valor) || 0;
+
+  // A câmera pode reconhecer o mesmo código em muitos quadros.
+  if (agora - ultimaLeitura < INTERVALO_ANTI_REPETICAO) {
+    return;
+  }
+
+  leiturasRecentes.set(valor, agora);
+  processandoLeitura = true;
+
+  try {
+    registrarCodigo(valor);
+  } catch (erro) {
+    console.error("Erro ao registrar código:", erro);
+    avisar("Ocorreu um erro ao registrar. Confira os dados.", "erro");
+  } finally {
+    // Pequena pausa entre leituras para evitar processamento simultâneo.
+    setTimeout(() => {
+      processandoLeitura = false;
+    }, 500);
+  }
+
+  // Limita o tamanho do mapa de leituras recentes.
+  if (leiturasRecentes.size > 100) {
+    for (const [codigo, horario] of leiturasRecentes) {
+      if (agora - horario > 30000) {
+        leiturasRecentes.delete(codigo);
+      }
+    }
+  }
+}
+
+busca.addEventListener("input", desenhar);
+modo.addEventListener("change", atualizarOperacao);
+marketplace.addEventListener("change", atualizarOperacao);
+
+baixarLote.addEventListener("click", () => {
+  const canal = marketplace.value;
+  const nomeLote = lote.value.trim();
+
+  if (!nomeLote) {
+    avisar("Informe o lote que será carregado.", "erro");
+    lote.focus();
+    return;
+  }
+
+  const pendentes = volumes.filter(v =>
+    v.status === "pendente" &&
+    v.marketplace === canal &&
+    v.lote.toUpperCase() === nomeLote.toUpperCase()
+  );
+
+  if (pendentes.length === 0) {
+    avisar("Não há volumes pendentes nesse lote.", "erro");
+    return;
+  }
+
+  const confirmar = confirm(
+    `Marketplace: ${canal}\n` +
+    `Lote: ${nomeLote}\n` +
+    `Volumes pendentes: ${pendentes.length}\n\n` +
+    "Confirma que TODOS esses volumes foram carregados?"
+  );
+
+  if (!confirmar) return;
+
+  const agora = new Date().toISOString();
+
+  pendentes.forEach(v => {
+    v.status = "carregado";
+    v.saida = agora;
+  });
+
+  salvar();
+  desenhar();
+  avisar(`${pendentes.length} volumes baixados do lote.`, "sucesso");
+});
+
+async function pararCamera() {
+  if (scanner) {
+    const atual = scanner;
+    scanner = null;
+
+    try {
+      await atual.stop();
+    } catch (erro) {
+      console.warn("A câmera já estava parada.", erro);
+    }
+
+    try {
+      await atual.clear();
+    } catch (erro) {
+      console.warn("Não foi necessário limpar o leitor.", erro);
+    }
+  }
+
+  areaCamera.hidden = true;
+  abrirCamera.disabled = false;
+  iniciandoCamera = false;
+  processandoLeitura = false;
+}
+
+abrirCamera.addEventListener("click", async () => {
+  if (iniciandoCamera || scanner) return;
+
+  if (!lote.value.trim()) {
+    avisar("Informe o lote antes de ativar a câmera.", "erro");
+    lote.focus();
+    return;
+  }
+
+  if (!window.Html5Qrcode) {
+    avisar("Biblioteca de leitura não carregada. Confira a internet.", "erro");
+    return;
+  }
+
+  iniciandoCamera = true;
+  abrirCamera.disabled = true;
+  areaCamera.hidden = false;
+  avisar("Iniciando câmera...", "neutro");
+
+  try {
+    scanner = new Html5Qrcode("leitor-camera");
+
+    await scanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 10,
+        qrbox: { width: 280, height: 130 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      },
+      texto => {
+        // Registra o código e mantém a câmera ativa.
+        processarLeitura(texto);
+      },
+      () => {
+        // Leituras não reconhecidas são normais durante a busca.
+      }
+    );
+
+    iniciandoCamera = false;
+    avisar("Câmera ativa. Aponte para a próxima etiqueta.", "sucesso");
+  } catch (erro) {
+    console.error("Falha ao abrir a câmera:", erro);
+    await pararCamera();
+    avisar(
+      "Não foi possível abrir a câmera. Confira as permissões do navegador.",
+      "erro"
+    );
+  }
+});
+
+fecharCamera.addEventListener("click", pararCamera);
+
+window.addEventListener("beforeunload", () => {
+  if (scanner) {
+    scanner.stop().catch(() => {});
+  }
+});
+
+salvar();
+desenhar();
+atualizarOperacao();
