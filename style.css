@@ -520,3 +520,97 @@ footer {
     max-height: 360px;
   }
 }
+
+/* ===== CABEÇALHO JB | G2 MÓVEIS ===== */
+
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.icone-marca {
+  width: auto;
+  height: auto;
+  min-width: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: #050505;
+  box-shadow: none;
+  border-radius: 0;
+  font-size: 38px;
+  font-weight: 950;
+  letter-spacing: -2px;
+}
+
+.icone-marca::after {
+  content: "|";
+  color: #42e58b;
+  font-weight: 400;
+  margin-left: 14px;
+  padding-right: 14px;
+  border-right: 1px solid #344239;
+}
+
+/* Logo da empresa ao lado do JB */
+.logo-empresa {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 115px;
+  height: 62px;
+  object-fit: contain;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 5px;
+}
+
+/* Organização do cabeçalho */
+.topo {
+  gap: 22px;
+}
+
+.topo h1 {
+  color: #f1f5f2;
+  font-weight: 800;
+}
+
+.sobretitulo {
+  color: #42e58b;
+  letter-spacing: 3px;
+}
+
+.subtitulo {
+  color: #a4b2a8;
+}
+
+/* Ajustes para celular */
+@media (max-width: 500px) {
+  .marca {
+    gap: 10px;
+  }
+
+  .icone-marca {
+    font-size: 29px;
+    letter-spacing: -1px;
+  }
+
+  .icone-marca::after {
+    margin-left: 9px;
+    padding-right: 9px;
+  }
+
+  .logo-empresa {
+    width: 82px;
+    height: 48px;
+    padding: 3px;
+  }
+
+  .topo {
+    gap: 12px;
+  }
+}
