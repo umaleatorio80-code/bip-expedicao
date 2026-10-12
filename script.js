@@ -1,9 +1,7 @@
 
-const codigo = document.getElementById("codigo");
 const modo = document.getElementById("modo");
 const marketplace = document.getElementById("marketplace");
 const lote = document.getElementById("lote");
-const botao = document.getElementById("registrar");
 const mensagem = document.getElementById("mensagem");
 const lista = document.getElementById("lista");
 const busca = document.getElementById("busca");
@@ -11,10 +9,19 @@ const abrirCamera = document.getElementById("abrirCamera");
 const fecharCamera = document.getElementById("fecharCamera");
 const areaCamera = document.getElementById("areaCamera");
 const baixarLote = document.getElementById("baixarLote");
+const operacaoAtual = document.getElementById("operacaoAtual");
+const canalAtual = document.getElementById("canalAtual");
+const listaVazia = document.getElementById("listaVazia");
 
 let volumes = JSON.parse(localStorage.getItem("bipVolumes") || "[]");
 let scanner = null;
 let iniciandoCamera = false;
+let processandoLeitura = false;
+
+// Impede que o mesmo código seja processado repetidamente
+// em vários quadros consecutivos da câmera.
+const leiturasRecentes = new Map();
+const INTERVALO_ANTI_REPETICAO = 2500;
 
 // Compatibilidade com os registros da versão anterior.
 volumes = volumes.map(v => ({
@@ -27,9 +34,27 @@ function salvar() {
   localStorage.setItem("bipVolumes", JSON.stringify(volumes));
 }
 
-function avisar(texto, sucesso = true) {
+function avisar(texto, tipo = "neutro") {
   mensagem.textContent = texto;
-  mensagem.style.color = sucesso ? "#15803d" : "#dc2626";
+  mensagem.className = "mensagem";
+
+  if (tipo === "sucesso") {
+    mensagem.classList.add("sucesso");
+  } else if (tipo === "erro") {
+    mensagem.classList.add("erro");
+  }
+}
+
+function atualizarOperacao() {
+  operacaoAtual.textContent = modo.value === "entrada"
+    ? "ENTRADA DE VOLUMES"
+    : "SAÍDA DE VOLUMES";
+
+  canalAtual.textContent = marketplace.value;
+
+  operacaoAtual.style.color = modo.value === "entrada"
+    ? "#42e58b"
+    : "#f4b454";
 }
 
 function desenhar() {
@@ -42,80 +67,91 @@ function desenhar() {
   const termo = busca.value.trim().toUpperCase();
   lista.innerHTML = "";
 
-  volumes
+  const filtrados = volumes
     .filter(v =>
       v.codigo.toUpperCase().includes(termo) ||
       v.lote.toUpperCase().includes(termo) ||
       v.marketplace.toUpperCase().includes(termo)
     )
     .slice()
-    .reverse()
-    .forEach(volume => {
-      const item = document.createElement("li");
-      const info = document.createElement("div");
-      const status = document.createElement("span");
-      const acoes = document.createElement("div");
-      const excluir = document.createElement("button");
+    .reverse();
 
-      info.textContent =
-        `${volume.codigo} | ${volume.marketplace} | ${volume.lote}`;
+  listaVazia.hidden = filtrados.length > 0;
 
-      status.className = "status";
-      status.textContent = volume.status === "pendente"
-        ? "PENDENTE NO BARRACÃO"
-        : "CARREGADO";
+  filtrados.forEach(volume => {
+    const item = document.createElement("li");
+    const info = document.createElement("div");
+    const detalhe = document.createElement("div");
+    const status = document.createElement("span");
+    const acoes = document.createElement("div");
+    const excluir = document.createElement("button");
 
-      status.style.color = volume.status === "pendente"
-        ? "#b45309"
-        : "#15803d";
+    info.className = "volume-info";
+    info.textContent = volume.codigo;
 
-      excluir.type = "button";
-      excluir.className = "btn-excluir";
-      excluir.textContent = "🗑️ Excluir";
+    detalhe.className = "volume-detalhe";
+    detalhe.textContent =
+      `${volume.marketplace} · Lote: ${volume.lote}`;
 
-      excluir.addEventListener("click", () => {
-        if (!confirm(
-          `Excluir o registro ${volume.codigo}?\n` +
-          "Isso removerá seu histórico deste navegador."
-        )) return;
+    status.className = volume.status === "pendente"
+      ? "status status-pendente"
+      : "status status-carregado";
 
-        volumes = volumes.filter(v => v.codigo !== volume.codigo);
-        salvar();
-        desenhar();
-        avisar("Registro excluído.");
-      });
+    status.textContent = volume.status === "pendente"
+      ? "PENDENTE NO BARRACÃO"
+      : "CARREGADO";
 
-      acoes.className = "acoes-volume";
-      acoes.appendChild(excluir);
-      item.append(info, status, acoes);
-      lista.appendChild(item);
+    excluir.type = "button";
+    excluir.className = "btn-excluir";
+    excluir.textContent = "Excluir registro";
+
+    excluir.addEventListener("click", () => {
+      const confirmar = confirm(
+        `Excluir o registro ${volume.codigo}?\n\n` +
+        "Isso removerá o registro deste navegador."
+      );
+
+      if (!confirmar) return;
+
+      volumes = volumes.filter(v => v.codigo !== volume.codigo);
+      salvar();
+      desenhar();
+      avisar("Registro excluído.", "sucesso");
     });
+
+    acoes.className = "acoes-volume";
+    acoes.appendChild(excluir);
+
+    item.append(info, detalhe, status, acoes);
+    lista.appendChild(item);
+  });
 }
 
-function registrar() {
-  const valor = codigo.value.trim().toUpperCase();
+function registrarCodigo(codigoLido) {
+  const valor = String(codigoLido || "").trim().toUpperCase();
   const canal = marketplace.value;
   const nomeLote = lote.value.trim();
 
   if (!valor) {
-    avisar("Leia ou digite um código primeiro.", false);
-    codigo.focus();
-    return;
+    avisar("Não foi possível ler o código. Tente novamente.", "erro");
+    return false;
   }
 
   if (!nomeLote) {
-    avisar("Informe o lote antes de registrar.", false);
+    avisar("Informe a identificação do lote antes de bipar.", "erro");
     lote.focus();
-    return;
+    return false;
   }
 
   const existente = volumes.find(v => v.codigo === valor);
 
   if (modo.value === "entrada") {
     if (existente) {
-      avisar("Essa etiqueta já está registrada.", false);
-      codigo.select();
-      return;
+      avisar(
+        `ETIQUETA DUPLICADA: ${valor}. Nenhum novo registro foi criado.`,
+        "erro"
+      );
+      return false;
     }
 
     volumes.push({
@@ -129,47 +165,84 @@ function registrar() {
 
     salvar();
     desenhar();
-    avisar("Entrada registrada!");
-  } else {
-    if (!existente) {
-      avisar("Etiqueta não encontrada na entrada.", false);
-      return;
-    }
-
-    if (existente.status === "carregado") {
-      avisar("Essa etiqueta já teve baixa.", false);
-      return;
-    }
-
-    existente.status = "carregado";
-    existente.saida = new Date().toISOString();
-
-    salvar();
-    desenhar();
-    avisar("Saída registrada!");
+    avisar(`ENTRADA REGISTRADA · ${valor}`, "sucesso");
+    return true;
   }
 
-  codigo.value = "";
-  codigo.focus();
+  if (!existente) {
+    avisar(
+      `ETIQUETA NÃO ENCONTRADA: ${valor}. Registre a entrada primeiro.`,
+      "erro"
+    );
+    return false;
+  }
+
+  if (existente.status === "carregado") {
+    avisar(
+      `JÁ CARREGADO: ${valor}. Nenhuma alteração realizada.`,
+      "erro"
+    );
+    return false;
+  }
+
+  // A saída individual só baixa a etiqueta reconhecida.
+  existente.status = "carregado";
+  existente.saida = new Date().toISOString();
+
+  salvar();
+  desenhar();
+  avisar(`SAÍDA REGISTRADA · ${valor}`, "sucesso");
+  return true;
 }
 
-botao.addEventListener("click", registrar);
+function processarLeitura(texto) {
+  const valor = String(texto || "").trim().toUpperCase();
 
-codigo.addEventListener("keydown", evento => {
-  if (evento.key === "Enter") {
-    evento.preventDefault();
-    registrar();
+  if (!valor || processandoLeitura) return;
+
+  const agora = Date.now();
+  const ultimaLeitura = leiturasRecentes.get(valor) || 0;
+
+  // A câmera pode reconhecer o mesmo código em muitos quadros.
+  if (agora - ultimaLeitura < INTERVALO_ANTI_REPETICAO) {
+    return;
   }
-});
+
+  leiturasRecentes.set(valor, agora);
+  processandoLeitura = true;
+
+  try {
+    registrarCodigo(valor);
+  } catch (erro) {
+    console.error("Erro ao registrar código:", erro);
+    avisar("Ocorreu um erro ao registrar. Confira os dados.", "erro");
+  } finally {
+    // Pequena pausa entre leituras para evitar processamento simultâneo.
+    setTimeout(() => {
+      processandoLeitura = false;
+    }, 500);
+  }
+
+  // Limita o tamanho do mapa de leituras recentes.
+  if (leiturasRecentes.size > 100) {
+    for (const [codigo, horario] of leiturasRecentes) {
+      if (agora - horario > 30000) {
+        leiturasRecentes.delete(codigo);
+      }
+    }
+  }
+}
 
 busca.addEventListener("input", desenhar);
+modo.addEventListener("change", atualizarOperacao);
+marketplace.addEventListener("change", atualizarOperacao);
 
 baixarLote.addEventListener("click", () => {
   const canal = marketplace.value;
   const nomeLote = lote.value.trim();
 
   if (!nomeLote) {
-    avisar("Informe o lote que será carregado.", false);
+    avisar("Informe o lote que será carregado.", "erro");
     lote.focus();
     return;
   }
@@ -181,7 +254,7 @@ baixarLote.addEventListener("click", () => {
   );
 
   if (pendentes.length === 0) {
-    avisar("Não há volumes pendentes nesse lote.", false);
+    avisar("Não há volumes pendentes nesse lote.", "erro");
     return;
   }
 
@@ -203,7 +276,7 @@ baixarLote.addEventListener("click", () => {
 
   salvar();
   desenhar();
-  avisar(`${pendentes.length} volumes baixados do lote.`);
+  avisar(`${pendentes.length} volumes baixados do lote.`, "sucesso");
 });
 
 async function pararCamera() {
@@ -213,29 +286,41 @@ async function pararCamera() {
 
     try {
       await atual.stop();
-    } catch (erro) {}
+    } catch (erro) {
+      console.warn("A câmera já estava parada.", erro);
+    }
 
     try {
       await atual.clear();
-    } catch (erro) {}
+    } catch (erro) {
+      console.warn("Não foi necessário limpar o leitor.", erro);
+    }
   }
 
   areaCamera.hidden = true;
   abrirCamera.disabled = false;
   iniciandoCamera = false;
+  processandoLeitura = false;
 }
 
 abrirCamera.addEventListener("click", async () => {
   if (iniciandoCamera || scanner) return;
 
+  if (!lote.value.trim()) {
+    avisar("Informe o lote antes de ativar a câmera.", "erro");
+    lote.focus();
+    return;
+  }
+
   if (!window.Html5Qrcode) {
-    avisar("Biblioteca não carregada. Confira a internet.", false);
+    avisar("Biblioteca de leitura não carregada. Confira a internet.", "erro");
     return;
   }
 
   iniciandoCamera = true;
   abrirCamera.disabled = true;
   areaCamera.hidden = false;
+  avisar("Iniciando câmera...", "neutro");
 
   try {
     scanner = new Html5Qrcode("leitor-camera");
@@ -244,7 +329,7 @@ abrirCamera.addEventListener("click", async () => {
       { facingMode: "environment" },
       {
         fps: 10,
-        qrbox: { width: 250, height: 120 },
+        qrbox: { width: 280, height: 130 },
         formatsToSupport: [
           Html5QrcodeSupportedFormats.CODE_128,
           Html5QrcodeSupportedFormats.CODE_39,
@@ -256,27 +341,35 @@ abrirCamera.addEventListener("click", async () => {
           Html5QrcodeSupportedFormats.QR_CODE
         ]
       },
-      async texto => {
-        codigo.value = texto.trim();
-        await pararCamera();
-        avisar("Código lido. Confira e registre o bip.");
-        codigo.focus();
+      texto => {
+        // Registra o código e mantém a câmera ativa.
+        processarLeitura(texto);
       },
-      () => {}
+      () => {
+        // Leituras não reconhecidas são normais durante a busca.
+      }
     );
 
     iniciandoCamera = false;
+    avisar("Câmera ativa. Aponte para a próxima etiqueta.", "sucesso");
   } catch (erro) {
+    console.error("Falha ao abrir a câmera:", erro);
     await pararCamera();
-    avisar("Não abriu a câmera. Confira as permissões e o HTTPS.", false);
+    avisar(
+      "Não foi possível abrir a câmera. Confira as permissões do navegador.",
+      "erro"
+    );
   }
 });
 
 fecharCamera.addEventListener("click", pararCamera);
 
 window.addEventListener("beforeunload", () => {
-  if (scanner) scanner.stop().catch(() => {});
+  if (scanner) {
+    scanner.stop().catch(() => {});
+  }
 });
 
 salvar();
 desenhar();
+atualizarOperacao();
