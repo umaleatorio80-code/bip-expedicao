@@ -1,282 +1,151 @@
 
-const codigo = document.getElementById("codigo");
-const modo = document.getElementById("modo");
-const marketplace = document.getElementById("marketplace");
-const lote = document.getElementById("lote");
-const botao = document.getElementById("registrar");
-const mensagem = document.getElementById("mensagem");
-const lista = document.getElementById("lista");
-const busca = document.getElementById("busca");
-const abrirCamera = document.getElementById("abrirCamera");
-const fecharCamera = document.getElementById("fecharCamera");
-const areaCamera = document.getElementById("areaCamera");
-const baixarLote = document.getElementById("baixarLote");
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#111714">
+  <title>BIP Expedição</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header class="topo">
+      <div class="marca">
+        <div class="icone-marca">BIP</div>
+        <div>
+          <p class="sobretitulo">CONTROLE LOGÍSTICO</p>
+          <h1>Expedição</h1>
+          <p class="subtitulo">Controle de volumes do barracão</p>
+        </div>
+      </div>
+      <div class="status-sistema">
+        <span class="ponto-verde"></span>
+        Sistema local
+      </div>
+    </header>
 
-let volumes = JSON.parse(localStorage.getItem("bipVolumes") || "[]");
-let scanner = null;
-let iniciandoCamera = false;
+    <section class="resumo">
+      <div class="card card-pendente">
+        <span class="card-titulo">VOLUMES PENDENTES</span>
+        <strong id="pendentes">0</strong>
+        <span class="card-legenda">No barracão</span>
+      </div>
+      <div class="card card-carregado">
+        <span class="card-titulo">VOLUMES CARREGADOS</span>
+        <strong id="carregados">0</strong>
+        <span class="card-legenda">Saída confirmada</span>
+      </div>
+    </section>
 
-// Compatibilidade com os registros da versão anterior.
-volumes = volumes.map(v => ({
-  ...v,
-  marketplace: v.marketplace || "Sem categoria",
-  lote: v.lote || "Lote antigo"
-}));
+    <section class="painel painel-operacao">
+      <div class="titulo-secao">
+        <span class="numero-secao">01</span>
+        <div>
+          <h2>Configurar operação</h2>
+          <p>Selecione o tipo de movimentação antes de bipar.</p>
+        </div>
+      </div>
 
-function salvar() {
-  localStorage.setItem("bipVolumes", JSON.stringify(volumes));
-}
+      <label for="modo">Tipo de operação</label>
+      <select id="modo">
+        <option value="entrada">Entrada — separar produto</option>
+        <option value="saida">Saída — carregar produto</option>
+      </select>
 
-function avisar(texto, sucesso = true) {
-  mensagem.textContent = texto;
-  mensagem.style.color = sucesso ? "#15803d" : "#dc2626";
-}
+      <label for="marketplace">Marketplace / transportadora</label>
+      <select id="marketplace">
+        <option value="Shopee">Shopee</option>
+        <option value="Mercado Livre">Mercado Livre</option>
+        <option value="Magalu">Magalu</option>
+        <option value="J&T - TikTok Shop">J&T - TikTok Shop</option>
+        <option value="J&T - Temu">J&T - Temu</option>
+        <option value="Amazon">Amazon</option>
+      </select>
 
-function desenhar() {
-  document.getElementById("pendentes").textContent =
-    volumes.filter(v => v.status === "pendente").length;
+      <label for="lote">Identificação do lote</label>
+      <input
+        id="lote"
+        type="text"
+        placeholder="Ex.: Carreta 01 - manhã"
+        autocomplete="off"
+      >
+      <p class="ajuda">Use a mesma identificação para todas as peças do mesmo lote.</p>
+    </section>
 
-  document.getElementById("carregados").textContent =
-    volumes.filter(v => v.status === "carregado").length;
+    <section class="painel painel-leitura">
+      <div class="titulo-secao">
+        <span class="numero-secao">02</span>
+        <div>
+          <h2>Leitura de etiquetas</h2>
+          <p>Aponte a câmera para o código de barras.</p>
+        </div>
+      </div>
 
-  const termo = busca.value.trim().toUpperCase();
-  lista.innerHTML = "";
+      <div class="operacao-atual">
+        <span class="etiqueta-pequena">OPERAÇÃO SELECIONADA</span>
+        <strong id="operacaoAtual">ENTRADA DE VOLUMES</strong>
+        <span id="canalAtual">Shopee</span>
+      </div>
 
-  volumes
-    .filter(v =>
-      v.codigo.toUpperCase().includes(termo) ||
-      v.lote.toUpperCase().includes(termo) ||
-      v.marketplace.toUpperCase().includes(termo)
-    )
-    .slice()
-    .reverse()
-    .forEach(volume => {
-      const item = document.createElement("li");
-      const info = document.createElement("div");
-      const status = document.createElement("span");
-      const acoes = document.createElement("div");
-      const excluir = document.createElement("button");
+      <button type="button" id="abrirCamera" class="btn-camera">
+        <span class="camera-icone">▣</span>
+        <span>ATIVAR CÂMERA</span>
+      </button>
 
-      info.textContent =
-        `${volume.codigo} | ${volume.marketplace} | ${volume.lote}`;
+      <div id="areaCamera" hidden>
+        <div class="instrucao-camera">
+          <span class="ponto-verde"></span>
+          Câmera ativa — pronta para ler
+        </div>
+        <div id="leitor-camera"></div>
+        <button type="button" id="fecharCamera" class="btn-secundario">
+          Pausar câmera
+        </button>
+      </div>
 
-      status.className = "status";
-      status.textContent = volume.status === "pendente"
-        ? "PENDENTE NO BARRACÃO"
-        : "CARREGADO";
+      <div id="mensagem" class="mensagem" role="status" aria-live="polite">
+        Configure a operação e o lote para começar.
+      </div>
 
-      status.style.color = volume.status === "pendente"
-        ? "#b45309"
-        : "#15803d";
+      <div class="aviso-automatico">
+        <span>↳</span>
+        A leitura registra automaticamente. Não precisa apertar outro botão.
+      </div>
+    </section>
 
-      excluir.type = "button";
-      excluir.className = "btn-excluir";
-      excluir.textContent = "🗑️ Excluir";
+    <section class="painel painel-lista">
+      <div class="titulo-secao">
+        <span class="numero-secao">03</span>
+        <div>
+          <h2>Controle de volumes</h2>
+          <p>Consulte os registros e confirme as saídas.</p>
+        </div>
+      </div>
 
-      excluir.addEventListener("click", () => {
-        if (!confirm(
-          `Excluir o registro ${volume.codigo}?\n` +
-          "Isso removerá seu histórico deste navegador."
-        )) return;
+      <button type="button" id="baixarLote" class="btn-lote">
+        Confirmar saída do lote inteiro
+      </button>
 
-        volumes = volumes.filter(v => v.codigo !== volume.codigo);
-        salvar();
-        desenhar();
-        avisar("Registro excluído.");
-      });
+      <label for="busca">Pesquisar registros</label>
+      <input
+        id="busca"
+        type="search"
+        placeholder="Código, lote ou marketplace..."
+        autocomplete="off"
+      >
 
-      acoes.className = "acoes-volume";
-      acoes.appendChild(excluir);
-      item.append(info, status, acoes);
-      lista.appendChild(item);
-    });
-}
+      <ul id="lista"></ul>
+      <p id="listaVazia" class="lista-vazia" hidden>Nenhum registro encontrado.</p>
+    </section>
 
-function registrar() {
-  const valor = codigo.value.trim().toUpperCase();
-  const canal = marketplace.value;
-  const nomeLote = lote.value.trim();
+    <footer>
+      <span class="ponto-verde"></span>
+      BIP EXPEDIÇÃO · CONTROLE LOCAL
+    </footer>
+  </main>
 
-  if (!valor) {
-    avisar("Leia ou digite um código primeiro.", false);
-    codigo.focus();
-    return;
-  }
-
-  if (!nomeLote) {
-    avisar("Informe o lote antes de registrar.", false);
-    lote.focus();
-    return;
-  }
-
-  const existente = volumes.find(v => v.codigo === valor);
-
-  if (modo.value === "entrada") {
-    if (existente) {
-      avisar("Essa etiqueta já está registrada.", false);
-      codigo.select();
-      return;
-    }
-
-    volumes.push({
-      codigo: valor,
-      marketplace: canal,
-      lote: nomeLote,
-      status: "pendente",
-      entrada: new Date().toISOString(),
-      saida: null
-    });
-
-    salvar();
-    desenhar();
-    avisar("Entrada registrada!");
-  } else {
-    if (!existente) {
-      avisar("Etiqueta não encontrada na entrada.", false);
-      return;
-    }
-
-    if (existente.status === "carregado") {
-      avisar("Essa etiqueta já teve baixa.", false);
-      return;
-    }
-
-    existente.status = "carregado";
-    existente.saida = new Date().toISOString();
-
-    salvar();
-    desenhar();
-    avisar("Saída registrada!");
-  }
-
-  codigo.value = "";
-  codigo.focus();
-}
-
-botao.addEventListener("click", registrar);
-
-codigo.addEventListener("keydown", evento => {
-  if (evento.key === "Enter") {
-    evento.preventDefault();
-    registrar();
-  }
-});
-
-busca.addEventListener("input", desenhar);
-
-baixarLote.addEventListener("click", () => {
-  const canal = marketplace.value;
-  const nomeLote = lote.value.trim();
-
-  if (!nomeLote) {
-    avisar("Informe o lote que será carregado.", false);
-    lote.focus();
-    return;
-  }
-
-  const pendentes = volumes.filter(v =>
-    v.status === "pendente" &&
-    v.marketplace === canal &&
-    v.lote.toUpperCase() === nomeLote.toUpperCase()
-  );
-
-  if (pendentes.length === 0) {
-    avisar("Não há volumes pendentes nesse lote.", false);
-    return;
-  }
-
-  const confirmar = confirm(
-    `Marketplace: ${canal}\n` +
-    `Lote: ${nomeLote}\n` +
-    `Volumes pendentes: ${pendentes.length}\n\n` +
-    "Confirma que TODOS esses volumes foram carregados?"
-  );
-
-  if (!confirmar) return;
-
-  const agora = new Date().toISOString();
-
-  pendentes.forEach(v => {
-    v.status = "carregado";
-    v.saida = agora;
-  });
-
-  salvar();
-  desenhar();
-  avisar(`${pendentes.length} volumes baixados do lote.`);
-});
-
-async function pararCamera() {
-  if (scanner) {
-    const atual = scanner;
-    scanner = null;
-
-    try {
-      await atual.stop();
-    } catch (erro) {}
-
-    try {
-      await atual.clear();
-    } catch (erro) {}
-  }
-
-  areaCamera.hidden = true;
-  abrirCamera.disabled = false;
-  iniciandoCamera = false;
-}
-
-abrirCamera.addEventListener("click", async () => {
-  if (iniciandoCamera || scanner) return;
-
-  if (!window.Html5Qrcode) {
-    avisar("Biblioteca não carregada. Confira a internet.", false);
-    return;
-  }
-
-  iniciandoCamera = true;
-  abrirCamera.disabled = true;
-  areaCamera.hidden = false;
-
-  try {
-    scanner = new Html5Qrcode("leitor-camera");
-
-    await scanner.start(
-      { facingMode: "environment" },
-      {
-        fps: 10,
-        qrbox: { width: 250, height: 120 },
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.ITF,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.QR_CODE
-        ]
-      },
-      async texto => {
-        codigo.value = texto.trim();
-        await pararCamera();
-        avisar("Código lido. Confira e registre o bip.");
-        codigo.focus();
-      },
-      () => {}
-    );
-
-    iniciandoCamera = false;
-  } catch (erro) {
-    await pararCamera();
-    avisar("Não abriu a câmera. Confira as permissões e o HTTPS.", false);
-  }
-});
-
-fecharCamera.addEventListener("click", pararCamera);
-
-window.addEventListener("beforeunload", () => {
-  if (scanner) scanner.stop().catch(() => {});
-});
-
-salvar();
-desenhar();
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script src="script.js"></script>
+</body>
+</html>
