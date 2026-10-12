@@ -1,0 +1,102 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bip Expedição</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header>
+      <h1>Bip Expedição</h1>
+      <p>Controle de produtos no barracão</p>
+    </header>
+
+    <section class="resumo">
+      <div class="card">
+        <span>Pendentes</span>
+        <strong id="pendentes">0</strong>
+      </div>
+      <div class="card">
+        <span>Carregados</span>
+        <strong id="carregados">0</strong>
+      </div>
+    </section>
+
+    <section class="painel">
+      <h2>Registrar movimentação</h2>
+
+      <label for="modo">Operação</label>
+      <select id="modo">
+        <option value="entrada">Entrada — separar produto</option>
+        <option value="saida">Saída — carregar produto</option>
+      </select>
+<label for="marketplace">Marketplace / Transportadora</label>
+<select id="marketplace">
+  <option value="Shopee">Shopee</option>
+  <option value="Mercado Livre">Mercado Livre</option>
+  <option value="Magalu">Magalu</option>
+  <option value="J&T - TikTok Shop">J&T - TikTok Shop</option>
+  <option value="J&T - Temu">J&T - Temu</option>
+  <option value="Amazon">Amazon</option>
+</select>
+
+<label for="lote">Identificação do lote</label>
+<input
+  id="lote"
+  type="text"
+  placeholder="Ex.: Carreta 01 - manhã"
+  autocomplete="off"
+>
+<p class="ajuda">
+  Use a mesma identificação para todas as peças do mesmo lote.
+</p>
+
+
+      <label for="codigo">Código da etiqueta Shopee</label>
+      <input
+        id="codigo"
+        type="text"
+        placeholder="Bipe ou digite o código"
+        autocomplete="off"
+      >
+<button type="button" id="abrirCamera">
+  📷 Ler etiqueta com a câmera
+</button>
+
+<div id="areaCamera" hidden>
+  <div id="leitor-camera"></div>
+  <button type="button" id="fecharCamera">
+    Fechar câmera
+  </button>
+</div>
+
+
+      <button id="registrar">Registrar bip</button>
+      <p id="mensagem" role="status"></p>
+    </section>
+
+    <section class="painel">
+      <h2>Volumes pendentes</h2>
+<button type="button" id="baixarLote">
+  Confirmar saída do lote inteiro
+</button>
+
+      <input
+        id="busca"
+        type="search"
+        placeholder="Pesquisar código..."
+      >
+
+      <ul id="lista"></ul>
+    </section>
+  </main>
+
+  
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
