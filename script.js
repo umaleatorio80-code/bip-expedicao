@@ -2,36 +2,63 @@
 const modo = document.getElementById("modo");
 const marketplace = document.getElementById("marketplace");
 const lote = document.getElementById("lote");
+
 const mensagem = document.getElementById("mensagem");
 const lista = document.getElementById("lista");
 const busca = document.getElementById("busca");
+const listaVazia = document.getElementById("listaVazia");
+
 const abrirCamera = document.getElementById("abrirCamera");
 const fecharCamera = document.getElementById("fecharCamera");
 const areaCamera = document.getElementById("areaCamera");
 const baixarLote = document.getElementById("baixarLote");
+
 const operacaoAtual = document.getElementById("operacaoAtual");
 const canalAtual = document.getElementById("canalAtual");
-const listaVazia = document.getElementById("listaVazia");
 
-let volumes = JSON.parse(localStorage.getItem("bipVolumes") || "[]");
+let volumes = [];
+
+try {
+  const dadosSalvos = JSON.parse(
+    localStorage.getItem("bipVolumes") || "[]"
+  );
+
+  volumes = Array.isArray(dadosSalvos) ? dadosSalvos : [];
+} catch (erro) {
+  console.error("Erro ao ler volumes salvos:", erro);
+  volumes = [];
+}
+
 let scanner = null;
 let iniciandoCamera = false;
 let processandoLeitura = false;
+let cameraAtiva = false;
 
-// Impede que o mesmo código seja processado repetidamente
-// em vários quadros consecutivos da câmera.
+// Impede a leitura repetida do mesmo código em quadros consecutivos.
 const leiturasRecentes = new Map();
 const INTERVALO_ANTI_REPETICAO = 2500;
 
 // Compatibilidade com os registros da versão anterior.
-volumes = volumes.map(v => ({
-  ...v,
-  marketplace: v.marketplace || "Sem categoria",
-  lote: v.lote || "Lote antigo"
+volumes = volumes.map(volume => ({
+  ...volume,
+  codigo: String(volume.codigo || ""),
+  marketplace: volume.marketplace || "Sem categoria",
+  lote: volume.lote || "Lote antigo",
+  status: volume.status || "pendente"
 }));
 
 function salvar() {
-  localStorage.setItem("bipVolumes", JSON.stringify(volumes));
+  try {
+    localStorage.setItem("bipVolumes", JSON.stringify(volumes));
+    return true;
+  } catch (erro) {
+    console.error("Erro ao salvar volumes:", erro);
+    avisar(
+      "Não foi possível salvar. O armazenamento do navegador pode estar cheio.",
+      "erro"
+    );
+    return false;
+  }
 }
 
 function avisar(texto, tipo = "neutro") {
@@ -40,228 +67,261 @@ function avisar(texto, tipo = "neutro") {
 
   if (tipo === "sucesso") {
     mensagem.classList.add("sucesso");
-  } else if (tipo === "erro") {
+  }
+
+  if (tipo === "erro") {
     mensagem.classList.add("erro");
   }
 }
 
 function atualizarOperacao() {
-  operacaoAtual.textContent = modo.value === "entrada"
-    ? "ENTRADA DE VOLUMES"
-    : "SAÍDA DE VOLUMES";
+  operacaoAtual.textContent =
+    modo.value === "entrada"
+      ? "ENTRADA DE VOLUMES"
+      : "SAÍDA DE VOLUMES";
 
   canalAtual.textContent = marketplace.value;
 
-  operacaoAtual.style.color = modo.value === "entrada"
-    ? "#42e58b"
-    : "#f4b454";
+  operacaoAtual.style.color =
+    modo.value === "entrada" ? "#42e58b" : "#f4b454";
 }
 
 function desenhar() {
-  document.getElementById("pendentes").textContent =
-    volumes.filter(v => v.status === "pendente").length;
+  const pendentes = volumes.filter(
+    volume => volume.status === "pendente"
+  ).length;
 
-  document.getElementById("carregados").textContent =
-    volumes.filter(v => v.status === "carregado").length;
+  const carregados = volumes.filter(
+    volume => volume.status === "carregado"
+  ).length;
+
+  document.getElementById("pendentes").textContent = pendentes;
+  document.getElementById("carregados").textContent = carregados;
 
   const termo = busca.value.trim().toUpperCase();
-  lista.innerHTML = "";
 
   const filtrados = volumes
-    .filter(v =>
-      v.codigo.toUpperCase().includes(termo) ||
-      v.lote.toUpperCase().includes(termo) ||
-      v.marketplace.toUpperCase().includes(termo)
-    )
+    .filter(volume => {
+      return (
+        volume.codigo.toUpperCase().includes(termo) ||
+        volume.lote.toUpperCase().includes(termo) ||
+        volume.marketplace.toUpperCase().includes(termo)
+      );
+    })
     .slice()
     .reverse();
 
-  listaVazia.hidden = filtrados.length > 0;
+  lista.replaceChildren();
+  listaVazia.hidden = filtrados.length !== 0;
 
   filtrados.forEach(volume => {
     const item = document.createElement("li");
-    const info = document.createElement("div");
-    const detalhe = document.createElement("div");
-    const status = document.createElement("span");
-    const acoes = document.createElement("div");
-    const excluir = document.createElement("button");
 
+    const info = document.createElement("div");
     info.className = "volume-info";
     info.textContent = volume.codigo;
 
+    const detalhe = document.createElement("div");
     detalhe.className = "volume-detalhe";
     detalhe.textContent =
       `${volume.marketplace} · Lote: ${volume.lote}`;
 
-    status.className = volume.status === "pendente"
-      ? "status status-pendente"
-      : "status status-carregado";
+    const status = document.createElement("span");
+    status.className =
+      volume.status === "pendente"
+        ? "status status-pendente"
+        : "status status-carregado";
 
-    status.textContent = volume.status === "pendente"
-      ? "PENDENTE NO BARRACÃO"
-      : "CARREGADO";
+    status.textContent =
+      volume.status === "pendente"
+        ? "PENDENTE NO BARRACÃO"
+        : "CARREGADO";
 
+    const acoes = document.createElement("div");
+    acoes.className = "acoes-volume";
+
+    const excluir = document.createElement("button");
     excluir.type = "button";
     excluir.className = "btn-excluir";
     excluir.textContent = "Excluir registro";
 
     excluir.addEventListener("click", () => {
       const confirmar = confirm(
-        `Excluir o registro ${volume.codigo}?\n\n` +
-        "Isso removerá o registro deste navegador."
+        `Deseja excluir o registro ${volume.codigo}?`
       );
 
       if (!confirmar) return;
 
-      volumes = volumes.filter(v => v.codigo !== volume.codigo);
-      salvar();
+      volumes = volumes.filter(
+        item => item.codigo !== volume.codigo
+      );
+
+      if (!salvar()) return;
+
       desenhar();
       avisar("Registro excluído.", "sucesso");
     });
 
-    acoes.className = "acoes-volume";
     acoes.appendChild(excluir);
-
     item.append(info, detalhe, status, acoes);
     lista.appendChild(item);
   });
 }
 
 function registrarCodigo(codigoLido) {
-  const valor = String(codigoLido || "").trim().toUpperCase();
-  const canal = marketplace.value;
-  const nomeLote = lote.value.trim();
+  const codigo = String(codigoLido || "")
+    .trim()
+    .toUpperCase();
 
-  if (!valor) {
-    avisar("Não foi possível ler o código. Tente novamente.", "erro");
+  const nomeLote = lote.value.trim();
+  const canal = marketplace.value;
+
+  if (!codigo) {
     return false;
   }
 
   if (!nomeLote) {
-    avisar("Informe a identificação do lote antes de bipar.", "erro");
-    lote.focus();
+    avisar("Informe o lote antes de bipar.", "erro");
     return false;
   }
 
-  const existente = volumes.find(v => v.codigo === valor);
+  const existente = volumes.find(
+    volume => volume.codigo.toUpperCase() === codigo
+  );
 
   if (modo.value === "entrada") {
     if (existente) {
       avisar(
-        `ETIQUETA DUPLICADA: ${valor}. Nenhum novo registro foi criado.`,
+        `ETIQUETA JÁ CADASTRADA: ${codigo}`,
         "erro"
       );
       return false;
     }
 
-    volumes.push({
-      codigo: valor,
+    const novoVolume = {
+      codigo,
       marketplace: canal,
       lote: nomeLote,
       status: "pendente",
       entrada: new Date().toISOString(),
       saida: null
-    });
+    };
 
-    salvar();
+    volumes.push(novoVolume);
+
+    if (!salvar()) {
+      volumes.pop();
+      return false;
+    }
+
     desenhar();
-    avisar(`ENTRADA REGISTRADA · ${valor}`, "sucesso");
+    avisar(`✓ ENTRADA REGISTRADA: ${codigo}`, "sucesso");
     return true;
   }
 
   if (!existente) {
     avisar(
-      `ETIQUETA NÃO ENCONTRADA: ${valor}. Registre a entrada primeiro.`,
+      `CÓDIGO NÃO ENCONTRADO: ${codigo}. Registre a entrada primeiro.`,
       "erro"
     );
     return false;
   }
 
   if (existente.status === "carregado") {
-    avisar(
-      `JÁ CARREGADO: ${valor}. Nenhuma alteração realizada.`,
-      "erro"
-    );
+    avisar(`ESTE VOLUME JÁ FOI CARREGADO: ${codigo}`, "erro");
     return false;
   }
 
-  // A saída individual só baixa a etiqueta reconhecida.
+  // Guarda os dados anteriores para poder desfazer se o salvamento falhar.
+  const statusAnterior = existente.status;
+  const saidaAnterior = existente.saida;
+
   existente.status = "carregado";
   existente.saida = new Date().toISOString();
 
-  salvar();
+  if (!salvar()) {
+    existente.status = statusAnterior;
+    existente.saida = saidaAnterior;
+    return false;
+  }
+
   desenhar();
-  avisar(`SAÍDA REGISTRADA · ${valor}`, "sucesso");
+  avisar(`✓ SAÍDA REGISTRADA: ${codigo}`, "sucesso");
   return true;
 }
 
 function processarLeitura(texto) {
-  const valor = String(texto || "").trim().toUpperCase();
+  const codigo = String(texto || "").trim().toUpperCase();
 
-  if (!valor || processandoLeitura) return;
+  if (!codigo || processandoLeitura) return;
 
   const agora = Date.now();
-  const ultimaLeitura = leiturasRecentes.get(valor) || 0;
+  const ultimaLeitura = leiturasRecentes.get(codigo) || 0;
 
-  // A câmera pode reconhecer o mesmo código em muitos quadros.
   if (agora - ultimaLeitura < INTERVALO_ANTI_REPETICAO) {
     return;
   }
 
-  leiturasRecentes.set(valor, agora);
+  // Registra o horário antes do processamento para evitar leituras
+  // repetidas enquanto o código continua visível para a câmera.
+  leiturasRecentes.set(codigo, agora);
   processandoLeitura = true;
 
   try {
-    registrarCodigo(valor);
+    registrarCodigo(codigo);
   } catch (erro) {
-    console.error("Erro ao registrar código:", erro);
-    avisar("Ocorreu um erro ao registrar. Confira os dados.", "erro");
+    console.error("Erro durante a leitura:", erro);
+    avisar("Erro ao processar a etiqueta. Tente novamente.", "erro");
   } finally {
-    // Pequena pausa entre leituras para evitar processamento simultâneo.
     setTimeout(() => {
       processandoLeitura = false;
     }, 500);
   }
 
-  // Limita o tamanho do mapa de leituras recentes.
+  // Limpa leituras antigas para evitar crescimento indefinido do mapa.
   if (leiturasRecentes.size > 100) {
-    for (const [codigo, horario] of leiturasRecentes) {
+    for (const [chave, horario] of leiturasRecentes) {
       if (agora - horario > 30000) {
-        leiturasRecentes.delete(codigo);
+        leiturasRecentes.delete(chave);
       }
     }
   }
 }
 
 busca.addEventListener("input", desenhar);
-modo.addEventListener("change", atualizarOperacao);
+
+modo.addEventListener("change", () => {
+  atualizarOperacao();
+  avisar("Operação alterada. Confira o modo antes de continuar.");
+});
+
 marketplace.addEventListener("change", atualizarOperacao);
 
 baixarLote.addEventListener("click", () => {
-  const canal = marketplace.value;
   const nomeLote = lote.value.trim();
+  const canal = marketplace.value;
 
   if (!nomeLote) {
-    avisar("Informe o lote que será carregado.", "erro");
+    avisar("Informe a identificação do lote.", "erro");
     lote.focus();
     return;
   }
 
-  const pendentes = volumes.filter(v =>
-    v.status === "pendente" &&
-    v.marketplace === canal &&
-    v.lote.toUpperCase() === nomeLote.toUpperCase()
+  const pendentes = volumes.filter(volume =>
+    volume.status === "pendente" &&
+    volume.marketplace === canal &&
+    volume.lote.toUpperCase() === nomeLote.toUpperCase()
   );
 
   if (pendentes.length === 0) {
-    avisar("Não há volumes pendentes nesse lote.", "erro");
+    avisar("Nenhum volume pendente encontrado nesse lote.", "erro");
     return;
   }
 
   const confirmar = confirm(
     `Marketplace: ${canal}\n` +
     `Lote: ${nomeLote}\n` +
-    `Volumes pendentes: ${pendentes.length}\n\n` +
+    `Volumes: ${pendentes.length}\n\n` +
     "Confirma que TODOS esses volumes foram carregados?"
   );
 
@@ -269,31 +329,43 @@ baixarLote.addEventListener("click", () => {
 
   const agora = new Date().toISOString();
 
-  pendentes.forEach(v => {
-    v.status = "carregado";
-    v.saida = agora;
+  pendentes.forEach(volume => {
+    volume.status = "carregado";
+    volume.saida = agora;
   });
 
-  salvar();
+  if (!salvar()) {
+    pendentes.forEach(volume => {
+      volume.status = "pendente";
+      volume.saida = null;
+    });
+    return;
+  }
+
   desenhar();
-  avisar(`${pendentes.length} volumes baixados do lote.`, "sucesso");
+  avisar(
+    `✓ ${pendentes.length} volumes baixados do lote.`,
+    "sucesso"
+  );
 });
 
 async function pararCamera() {
-  if (scanner) {
-    const atual = scanner;
-    scanner = null;
+  const leitor = scanner;
 
+  scanner = null;
+  cameraAtiva = false;
+
+  if (leitor) {
     try {
-      await atual.stop();
+      await leitor.stop();
     } catch (erro) {
-      console.warn("A câmera já estava parada.", erro);
+      console.warn("A câmera já estava parada:", erro);
     }
 
     try {
-      await atual.clear();
+      await leitor.clear();
     } catch (erro) {
-      console.warn("Não foi necessário limpar o leitor.", erro);
+      console.warn("Limpeza do leitor:", erro);
     }
   }
 
@@ -304,54 +376,75 @@ async function pararCamera() {
 }
 
 abrirCamera.addEventListener("click", async () => {
-  if (iniciandoCamera || scanner) return;
+  if (iniciandoCamera || cameraAtiva) return;
 
   if (!lote.value.trim()) {
-    avisar("Informe o lote antes de ativar a câmera.", "erro");
+    avisar("Informe o lote antes de abrir a câmera.", "erro");
     lote.focus();
     return;
   }
 
   if (!window.Html5Qrcode) {
-    avisar("Biblioteca de leitura não carregada. Confira a internet.", "erro");
+    avisar(
+      "O leitor não carregou. Verifique a conexão com a internet.",
+      "erro"
+    );
     return;
   }
 
   iniciandoCamera = true;
   abrirCamera.disabled = true;
   areaCamera.hidden = false;
-  avisar("Iniciando câmera...", "neutro");
+
+  avisar("Solicitando acesso à câmera...");
 
   try {
-    scanner = new Html5Qrcode("leitor-camera");
+    const leitor = new Html5Qrcode("leitor-camera", {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.CODE_93,
+        Html5QrcodeSupportedFormats.CODABAR,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.ITF,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.QR_CODE
+      ],
+      verbose: false
+    });
 
-    await scanner.start(
-      
-{
-  fps: 15,
-  formatsToSupport: [
-    Html5QrcodeSupportedFormats.CODE_128,
-    Html5QrcodeSupportedFormats.CODE_39,
-    Html5QrcodeSupportedFormats.CODE_93,
-    Html5QrcodeSupportedFormats.CODABAR,
-    Html5QrcodeSupportedFormats.EAN_13,
-    Html5QrcodeSupportedFormats.EAN_8,
-    Html5QrcodeSupportedFormats.ITF,
-    Html5QrcodeSupportedFormats.UPC_A,
-    Html5QrcodeSupportedFormats.UPC_E,
-    Html5QrcodeSupportedFormats.QR_CODE
-  ]
-,
-}
+    scanner = leitor;
+
+    await leitor.start(
+      { facingMode: "environment" },
+      {
+        fps: 15,
+        aspectRatio: 1.777778
+      },
+      codigo => {
+        processarLeitura(codigo);
+      },
+      () => {
+        // É normal não encontrar um código em todos os quadros.
+      }
     );
 
+    cameraAtiva = true;
     iniciandoCamera = false;
-    avisar("Câmera ativa. Aponte para a próxima etiqueta.", "sucesso");
-  } catch (erro) {
-    console.error("Falha ao abrir a câmera:", erro);
-    await pararCamera();
+
     avisar(
-      "Não foi possível abrir a câmera. Confira as permissões do navegador.",
+      "Câmera ativa. Aponte para o código de barras; o registro é automático.",
+      "sucesso"
+    );
+  } catch (erro) {
+    console.error("Erro ao iniciar a câmera:", erro);
+
+    await pararCamera();
+
+    avisar(
+      "Não foi possível iniciar a câmera. Confira a permissão do Safari e tente novamente.",
       "erro"
     );
   }
@@ -359,12 +452,12 @@ abrirCamera.addEventListener("click", async () => {
 
 fecharCamera.addEventListener("click", pararCamera);
 
-window.addEventListener("beforeunload", () => {
-  if (scanner) {
-    scanner.stop().catch(() => {});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden && scanner) {
+    pararCamera();
   }
 });
 
-salvar();
+// Inicialização: mantém os registros já existentes.
 desenhar();
 atualizarOperacao();
