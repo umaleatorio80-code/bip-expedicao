@@ -1,14 +1,14 @@
 
 :root {
   color-scheme: dark;
-  --fundo: #111714;
-  --painel: #1b231e;
-  --painel-claro: #222d26;
-  --borda: #344239;
-  --verde: #42e58b;
-  --verde-escuro: #163e2a;
-  --texto: #f1f5f2;
-  --texto-suave: #a4b2a8;
+  --fundo: #160f15;
+  --painel: #241923;
+  --painel-claro: #30202d;
+  --borda: #503449;
+  --verde: #ff55ad;
+  --verde-escuro: #572442;
+  --texto: #f8f1f6;
+  --texto-suave: #b9a6b5;
   --vermelho: #ff7777;
   --laranja: #f4b454;
 }
@@ -26,7 +26,7 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
   background:
-    radial-gradient(ellipse at top, #1d2b21 0%, transparent 48%),
+    radial-gradient(ellipse at top, #422039 0%, transparent 48%),
     var(--fundo);
   color: var(--texto);
   padding: 20px;
@@ -60,11 +60,11 @@ body {
   height: 62px;
   border-radius: 15px;
   background: var(--verde);
-  color: #102017;
+  color: #260d1c;
   font-size: 22px;
   font-weight: 900;
   letter-spacing: -1px;
-  box-shadow: 0 0 28px #42e58b20;
+  box-shadow: 0 0 28px #ff55ad35;
 }
 
 .sobretitulo,
@@ -102,7 +102,7 @@ body {
   flex: 0 0 8px;
   border-radius: 50%;
   background: var(--verde);
-  box-shadow: 0 0 10px #42e58b70;
+  box-shadow: 0 0 10px #ff55ad70;
 }
 
 .resumo {
@@ -171,8 +171,8 @@ body {
   min-width: 34px;
   height: 34px;
   border-radius: 9px;
-  background: #42e58b16;
-  border: 1px solid #42e58b40;
+  background: #ff55ad18;
+  border: 1px solid #ff55ad50;
   color: var(--verde);
   font-size: 12px;
   font-weight: 900;
@@ -192,7 +192,7 @@ body {
 label {
   display: block;
   margin: 16px 0 8px;
-  color: #dce5de;
+  color: #eadce6;
   font-size: 12px;
   font-weight: 700;
 }
@@ -206,20 +206,20 @@ select {
   border: 1px solid var(--borda);
   border-radius: 9px;
   outline: none;
-  background: #121914;
+  background: #1a1119;
   color: var(--texto);
   font: inherit;
   font-size: 15px;
 }
 
 input::placeholder {
-  color: #77867b;
+  color: #927c8d;
 }
 
 input:focus,
 select:focus {
   border-color: var(--verde);
-  box-shadow: 0 0 0 3px #42e58b18;
+  box-shadow: 0 0 0 3px #ff55ad20;
 }
 
 .ajuda {
@@ -235,7 +235,7 @@ select:focus {
   gap: 7px;
   padding: 15px;
   border-radius: 10px;
-  background: #121914;
+  background: #1a1119;
   border: 1px solid var(--borda);
   margin-bottom: 14px;
 }
@@ -281,12 +281,13 @@ button:disabled {
   gap: 10px;
   min-height: 56px;
   background: var(--verde);
-  color: #102017;
+  color: #260d1c;
   letter-spacing: 0.6px;
 }
 
 .btn-camera:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.12);
+  box-shadow: 0 0 18px #ff55ad30;
 }
 
 .camera-icone {
@@ -304,8 +305,8 @@ button:disabled {
   padding: 12px;
   margin-bottom: 10px;
   border-radius: 8px;
-  background: #163e2a;
-  color: #b7f7cf;
+  background: #572442;
+  color: #ffd5eb;
   font-size: 12px;
   font-weight: 700;
 }
@@ -315,7 +316,7 @@ button:disabled {
   overflow: hidden;
   border: 1px solid var(--borda);
   border-radius: 12px;
-  background: #080b09;
+  background: #080608;
 }
 
 #leitor-camera video {
@@ -329,8 +330,8 @@ button:disabled {
 
 .btn-secundario {
   margin-top: 10px;
-  background: #303b33;
-  border-color: #46554a;
+  background: #3b2b39;
+  border-color: #62465c;
   color: var(--texto);
 }
 
@@ -340,7 +341,7 @@ button:disabled {
   min-height: 44px;
   border: 1px solid var(--borda);
   border-radius: 8px;
-  background: #121914;
+  background: #1a1119;
   color: var(--texto-suave);
   font-size: 13px;
   line-height: 1.5;
@@ -348,9 +349,9 @@ button:disabled {
 }
 
 .mensagem.sucesso {
-  border-color: #28794a;
-  background: #153322;
-  color: #a7f3c0;
+  border-color: #a83d7c;
+  background: #3c1b32;
+  color: #ffc4e4;
 }
 
 .mensagem.erro {
@@ -426,8 +427,8 @@ button:disabled {
 }
 
 .status-carregado {
-  background: #163e2a;
-  color: #a7f3c0;
+  background: #572442;
+  color: #ffc4e4;
 }
 
 .acoes-volume {
@@ -464,7 +465,7 @@ footer {
   align-items: center;
   gap: 9px;
   padding: 10px 0 20px;
-  color: #78877c;
+  color: #927c8d;
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 1px;
