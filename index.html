@@ -7,17 +7,13 @@
   <meta name="theme-color" content="#111714">
   <title>BIP Expedição</title>
   <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
   <main class="container">
     <header class="topo">
       <div class="marca">
-        <div class="icone-marca">JB</div>
-<img
-  class="logo-empresa"
-  src="logo-g2.png"
-  alt="G2 Móveis"
->
+        <div class="icone-marca">BIP</div>
         <div>
           <p class="sobretitulo">CONTROLE LOGÍSTICO</p>
           <h1>Expedição</h1>
@@ -144,7 +140,43 @@
       <p id="listaVazia" class="lista-vazia" hidden>Nenhum registro encontrado.</p>
     </section>
 
-    <footer>
+   
+<section class="painel" id="painelCompartilhamento">
+  <div class="titulo-secao">
+    <span class="numero-secao">04</span>
+    <div>
+      <h2>Portal de Coleta</h2>
+      <p>Compartilhe os QR Codes dos seus lotes.</p>
+    </div>
+  </div>
+
+  <div id="areaLogin">
+    <label for="emailAdmin">E-mail administrativo</label>
+    <input id="emailAdmin" type="email" placeholder="Seu e-mail">
+
+    <label for="senhaAdmin">Senha</label>
+    <input id="senhaAdmin" type="password" placeholder="Sua senha">
+
+    <button type="button" id="entrarAdmin" class="btn-camera">
+      Entrar no painel
+    </button>
+  </div>
+
+  <div id="areaAdmin" hidden>
+    <p id="statusAdmin"></p>
+
+    <button type="button" id="compartilharLote" class="btn-camera">
+      Gerar link do lote selecionado
+    </button>
+
+    <div id="linkGerado" hidden></div>
+
+    <button type="button" id="sairAdmin" class="btn-secundario">
+      Sair da administração
+    </button>
+  </div>
+</section>
+ <footer>
       <span class="ponto-verde"></span>
       BIP EXPEDIÇÃO · CONTROLE LOCAL
     </footer>

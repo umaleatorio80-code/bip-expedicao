@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111714">
+  <title>Portal de Coleta | JB</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .portal {
+      max-width: 600px;
+      margin: 30px auto;
+      text-align: center;
+    }
+    .qr-item {
+      background: white;
+      color: #111;
+      border-radius: 12px;
+      padding: 18px;
+      margin: 18px 0;
+    }
+    .qr-item img {
+      width: 230px;
+      max-width: 100%;
+      display: block;
+      margin: auto;
+    }
+    .qr-codigo {
+      font-size: 18px;
+      font-weight: 800;
+      overflow-wrap: anywhere;
+      margin-top: 12px;
+    }
+    .navegacao {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+    .navegacao button {
+      flex: 1;
+    }
+  </style>
+</head>
+<body>
+  <main class="container portal">
+    <header class="topo">
+      <div>
+        <p class="sobretitulo">JB · EXPEDIÇÃO</p>
+        <h1>Portal de Coleta</h1>
+        <p class="subtitulo">Leitura de volumes</p>
+      </div>
+    </header>
+
+    <section class="painel">
+      <h2 id="nomeLote">Carregando lote...</h2>
+      <p id="marketplace"></p>
+      <h2 id="contador">0 / 0</h2>
+
+      <div id="qrArea"></div>
+
+      <div class="navegacao">
+        <button id="anterior" class="btn-secundario">Anterior</button>
+        <button id="proximo" class="btn-camera">Próximo</button>
+      </div>
+
+      <p id="mensagem" class="mensagem">
+        Carregando informações...
+      </p>
+    </section>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL = "https://oppsnjqnctbalzsqrbnv.supabase.co";
+    const SUPABASE_KEY = "sb_publishable_U9y7jGfxtpd7xapMUwX6Xg_oNGl3dDW";
+
+    const db = window.supabase.createClient(
+      SUPABASE_URL,
+      SUPABASE_KEY
+    );
+
+    const token = new URLSearchParams(location.search).get("token");
+
+    let codigos = [];
+    let indice = 0;
+
+    const qrArea = document.getElementById("qrArea");
+    const mensagem = document.getElementById("mensagem");
+
+    async function carregarLote() {
+      if (!token) {
+        mensagem.textContent = "Link inválido ou incompleto.";
+        return;
+      }
+
+      const { data, error } = await db.rpc(
+        "consultar_lote",
+        { p_token: token }
+      );
+
+      if (error || !data || data.length === 0) {
+        mensagem.textContent =
+          "Este link não existe ou foi revogado.";
+        return;
+      }
+
+      const lote = data[0];
+
+      document.getElementById("nomeLote").textContent =
+        lote.nome_lote;
+
+      document.getElementById("marketplace").textContent =
+        lote.marketplace;
+
+      codigos = lote.codigos;
+
+      if (!Array.isArray(codigos) || codigos.length === 0) {
+        mensagem.textContent = "Este lote não possui códigos.";
+        return;
+      }
+
+      mostrarCodigo();
+    }
+
+    function mostrarCodigo() {
+      const codigo = codigos[indice];
+
+      document.getElementById("contador").textContent =
+        `${indice + 1} / ${codigos.length}`;
+
+      qrArea.innerHTML = "";
+
+      const bloco = document.createElement("div");
+      bloco.className = "qr-item";
+
+      const imagem = document.createElement("img");
+      imagem.alt = "QR Code do volume";
+
+      // Gera um QR Code com o texto exato do código BR.
+      imagem.src =
+        "https://api.qrserver.com/v1/create-qr-code/?size=500x500&data=" +
+        encodeURIComponent(codigo);
+
+      const texto = document.createElement("p");
+      texto.className = "qr-codigo";
+      texto.textContent = codigo;
+
+      bloco.append(imagem, texto);
+      qrArea.appendChild(bloco);
+
+      document.getElementById("anterior").disabled =
+        indice === 0;
+
+      document.getElementById("proximo").disabled =
+        indice === codigos.length - 1;
+
+      mensagem.textContent = "Apresente o QR Code ao ponto de coleta.";
+    }
+
+    document.getElementById("anterior").onclick = () => {
+      if (indice > 0) {
+        indice--;
+        mostrarCodigo();
+      }
+    };
+
+    document.getElementById("proximo").onclick = () => {
+      if (indice < codigos.length - 1) {
+        indice++;
+        mostrarCodigo();
+      }
+    };
+
+    carregarLote();
+  </script>
+</body>
+</html>

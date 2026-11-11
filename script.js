@@ -2,63 +2,36 @@
 const modo = document.getElementById("modo");
 const marketplace = document.getElementById("marketplace");
 const lote = document.getElementById("lote");
-
 const mensagem = document.getElementById("mensagem");
 const lista = document.getElementById("lista");
 const busca = document.getElementById("busca");
-const listaVazia = document.getElementById("listaVazia");
-
 const abrirCamera = document.getElementById("abrirCamera");
 const fecharCamera = document.getElementById("fecharCamera");
 const areaCamera = document.getElementById("areaCamera");
 const baixarLote = document.getElementById("baixarLote");
-
 const operacaoAtual = document.getElementById("operacaoAtual");
 const canalAtual = document.getElementById("canalAtual");
+const listaVazia = document.getElementById("listaVazia");
 
-let volumes = [];
-
-try {
-  const dadosSalvos = JSON.parse(
-    localStorage.getItem("bipVolumes") || "[]"
-  );
-
-  volumes = Array.isArray(dadosSalvos) ? dadosSalvos : [];
-} catch (erro) {
-  console.error("Erro ao ler volumes salvos:", erro);
-  volumes = [];
-}
-
+let volumes = JSON.parse(localStorage.getItem("bipVolumes") || "[]");
 let scanner = null;
 let iniciandoCamera = false;
 let processandoLeitura = false;
-let cameraAtiva = false;
 
-// Impede a leitura repetida do mesmo código em quadros consecutivos.
+// Impede que o mesmo código seja processado repetidamente
+// em vários quadros consecutivos da câmera.
 const leiturasRecentes = new Map();
 const INTERVALO_ANTI_REPETICAO = 2500;
 
 // Compatibilidade com os registros da versão anterior.
-volumes = volumes.map(volume => ({
-  ...volume,
-  codigo: String(volume.codigo || ""),
-  marketplace: volume.marketplace || "Sem categoria",
-  lote: volume.lote || "Lote antigo",
-  status: volume.status || "pendente"
+volumes = volumes.map(v => ({
+  ...v,
+  marketplace: v.marketplace || "Sem categoria",
+  lote: v.lote || "Lote antigo"
 }));
 
 function salvar() {
-  try {
-    localStorage.setItem("bipVolumes", JSON.stringify(volumes));
-    return true;
-  } catch (erro) {
-    console.error("Erro ao salvar volumes:", erro);
-    avisar(
-      "Não foi possível salvar. O armazenamento do navegador pode estar cheio.",
-      "erro"
-    );
-    return false;
-  }
+  localStorage.setItem("bipVolumes", JSON.stringify(volumes));
 }
 
 function avisar(texto, tipo = "neutro") {
@@ -67,261 +40,228 @@ function avisar(texto, tipo = "neutro") {
 
   if (tipo === "sucesso") {
     mensagem.classList.add("sucesso");
-  }
-
-  if (tipo === "erro") {
+  } else if (tipo === "erro") {
     mensagem.classList.add("erro");
   }
 }
 
 function atualizarOperacao() {
-  operacaoAtual.textContent =
-    modo.value === "entrada"
-      ? "ENTRADA DE VOLUMES"
-      : "SAÍDA DE VOLUMES";
+  operacaoAtual.textContent = modo.value === "entrada"
+    ? "ENTRADA DE VOLUMES"
+    : "SAÍDA DE VOLUMES";
 
   canalAtual.textContent = marketplace.value;
 
-  operacaoAtual.style.color =
-    modo.value === "entrada" ? "#42e58b" : "#f4b454";
+  operacaoAtual.style.color = modo.value === "entrada"
+    ? "#42e58b"
+    : "#f4b454";
 }
 
 function desenhar() {
-  const pendentes = volumes.filter(
-    volume => volume.status === "pendente"
-  ).length;
+  document.getElementById("pendentes").textContent =
+    volumes.filter(v => v.status === "pendente").length;
 
-  const carregados = volumes.filter(
-    volume => volume.status === "carregado"
-  ).length;
-
-  document.getElementById("pendentes").textContent = pendentes;
-  document.getElementById("carregados").textContent = carregados;
+  document.getElementById("carregados").textContent =
+    volumes.filter(v => v.status === "carregado").length;
 
   const termo = busca.value.trim().toUpperCase();
+  lista.innerHTML = "";
 
   const filtrados = volumes
-    .filter(volume => {
-      return (
-        volume.codigo.toUpperCase().includes(termo) ||
-        volume.lote.toUpperCase().includes(termo) ||
-        volume.marketplace.toUpperCase().includes(termo)
-      );
-    })
+    .filter(v =>
+      v.codigo.toUpperCase().includes(termo) ||
+      v.lote.toUpperCase().includes(termo) ||
+      v.marketplace.toUpperCase().includes(termo)
+    )
     .slice()
     .reverse();
 
-  lista.replaceChildren();
-  listaVazia.hidden = filtrados.length !== 0;
+  listaVazia.hidden = filtrados.length > 0;
 
   filtrados.forEach(volume => {
     const item = document.createElement("li");
-
     const info = document.createElement("div");
+    const detalhe = document.createElement("div");
+    const status = document.createElement("span");
+    const acoes = document.createElement("div");
+    const excluir = document.createElement("button");
+
     info.className = "volume-info";
     info.textContent = volume.codigo;
 
-    const detalhe = document.createElement("div");
     detalhe.className = "volume-detalhe";
     detalhe.textContent =
       `${volume.marketplace} · Lote: ${volume.lote}`;
 
-    const status = document.createElement("span");
-    status.className =
-      volume.status === "pendente"
-        ? "status status-pendente"
-        : "status status-carregado";
+    status.className = volume.status === "pendente"
+      ? "status status-pendente"
+      : "status status-carregado";
 
-    status.textContent =
-      volume.status === "pendente"
-        ? "PENDENTE NO BARRACÃO"
-        : "CARREGADO";
+    status.textContent = volume.status === "pendente"
+      ? "PENDENTE NO BARRACÃO"
+      : "CARREGADO";
 
-    const acoes = document.createElement("div");
-    acoes.className = "acoes-volume";
-
-    const excluir = document.createElement("button");
     excluir.type = "button";
     excluir.className = "btn-excluir";
     excluir.textContent = "Excluir registro";
 
     excluir.addEventListener("click", () => {
       const confirmar = confirm(
-        `Deseja excluir o registro ${volume.codigo}?`
+        `Excluir o registro ${volume.codigo}?\n\n` +
+        "Isso removerá o registro deste navegador."
       );
 
       if (!confirmar) return;
 
-      volumes = volumes.filter(
-        item => item.codigo !== volume.codigo
-      );
-
-      if (!salvar()) return;
-
+      volumes = volumes.filter(v => v.codigo !== volume.codigo);
+      salvar();
       desenhar();
       avisar("Registro excluído.", "sucesso");
     });
 
+    acoes.className = "acoes-volume";
     acoes.appendChild(excluir);
+
     item.append(info, detalhe, status, acoes);
     lista.appendChild(item);
   });
 }
 
 function registrarCodigo(codigoLido) {
-  const codigo = String(codigoLido || "")
-    .trim()
-    .toUpperCase();
-
-  const nomeLote = lote.value.trim();
+  const valor = String(codigoLido || "").trim().toUpperCase();
   const canal = marketplace.value;
+  const nomeLote = lote.value.trim();
 
-  if (!codigo) {
+  if (!valor) {
+    avisar("Não foi possível ler o código. Tente novamente.", "erro");
     return false;
   }
 
   if (!nomeLote) {
-    avisar("Informe o lote antes de bipar.", "erro");
+    avisar("Informe a identificação do lote antes de bipar.", "erro");
+    lote.focus();
     return false;
   }
 
-  const existente = volumes.find(
-    volume => volume.codigo.toUpperCase() === codigo
-  );
+  const existente = volumes.find(v => v.codigo === valor);
 
   if (modo.value === "entrada") {
     if (existente) {
       avisar(
-        `ETIQUETA JÁ CADASTRADA: ${codigo}`,
+        `ETIQUETA DUPLICADA: ${valor}. Nenhum novo registro foi criado.`,
         "erro"
       );
       return false;
     }
 
-    const novoVolume = {
-      codigo,
+    volumes.push({
+      codigo: valor,
       marketplace: canal,
       lote: nomeLote,
       status: "pendente",
       entrada: new Date().toISOString(),
       saida: null
-    };
+    });
 
-    volumes.push(novoVolume);
-
-    if (!salvar()) {
-      volumes.pop();
-      return false;
-    }
-
+    salvar();
     desenhar();
-    avisar(`✓ ENTRADA REGISTRADA: ${codigo}`, "sucesso");
+    avisar(`ENTRADA REGISTRADA · ${valor}`, "sucesso");
     return true;
   }
 
   if (!existente) {
     avisar(
-      `CÓDIGO NÃO ENCONTRADO: ${codigo}. Registre a entrada primeiro.`,
+      `ETIQUETA NÃO ENCONTRADA: ${valor}. Registre a entrada primeiro.`,
       "erro"
     );
     return false;
   }
 
   if (existente.status === "carregado") {
-    avisar(`ESTE VOLUME JÁ FOI CARREGADO: ${codigo}`, "erro");
+    avisar(
+      `JÁ CARREGADO: ${valor}. Nenhuma alteração realizada.`,
+      "erro"
+    );
     return false;
   }
 
-  // Guarda os dados anteriores para poder desfazer se o salvamento falhar.
-  const statusAnterior = existente.status;
-  const saidaAnterior = existente.saida;
-
+  // A saída individual só baixa a etiqueta reconhecida.
   existente.status = "carregado";
   existente.saida = new Date().toISOString();
 
-  if (!salvar()) {
-    existente.status = statusAnterior;
-    existente.saida = saidaAnterior;
-    return false;
-  }
-
+  salvar();
   desenhar();
-  avisar(`✓ SAÍDA REGISTRADA: ${codigo}`, "sucesso");
+  avisar(`SAÍDA REGISTRADA · ${valor}`, "sucesso");
   return true;
 }
 
 function processarLeitura(texto) {
-  const codigo = String(texto || "").trim().toUpperCase();
+  const valor = String(texto || "").trim().toUpperCase();
 
-  if (!codigo || processandoLeitura) return;
+  if (!valor || processandoLeitura) return;
 
   const agora = Date.now();
-  const ultimaLeitura = leiturasRecentes.get(codigo) || 0;
+  const ultimaLeitura = leiturasRecentes.get(valor) || 0;
 
+  // A câmera pode reconhecer o mesmo código em muitos quadros.
   if (agora - ultimaLeitura < INTERVALO_ANTI_REPETICAO) {
     return;
   }
 
-  // Registra o horário antes do processamento para evitar leituras
-  // repetidas enquanto o código continua visível para a câmera.
-  leiturasRecentes.set(codigo, agora);
+  leiturasRecentes.set(valor, agora);
   processandoLeitura = true;
 
   try {
-    registrarCodigo(codigo);
+    registrarCodigo(valor);
   } catch (erro) {
-    console.error("Erro durante a leitura:", erro);
-    avisar("Erro ao processar a etiqueta. Tente novamente.", "erro");
+    console.error("Erro ao registrar código:", erro);
+    avisar("Ocorreu um erro ao registrar. Confira os dados.", "erro");
   } finally {
+    // Pequena pausa entre leituras para evitar processamento simultâneo.
     setTimeout(() => {
       processandoLeitura = false;
     }, 500);
   }
 
-  // Limpa leituras antigas para evitar crescimento indefinido do mapa.
+  // Limita o tamanho do mapa de leituras recentes.
   if (leiturasRecentes.size > 100) {
-    for (const [chave, horario] of leiturasRecentes) {
+    for (const [codigo, horario] of leiturasRecentes) {
       if (agora - horario > 30000) {
-        leiturasRecentes.delete(chave);
+        leiturasRecentes.delete(codigo);
       }
     }
   }
 }
 
 busca.addEventListener("input", desenhar);
-
-modo.addEventListener("change", () => {
-  atualizarOperacao();
-  avisar("Operação alterada. Confira o modo antes de continuar.");
-});
-
+modo.addEventListener("change", atualizarOperacao);
 marketplace.addEventListener("change", atualizarOperacao);
 
 baixarLote.addEventListener("click", () => {
-  const nomeLote = lote.value.trim();
   const canal = marketplace.value;
+  const nomeLote = lote.value.trim();
 
   if (!nomeLote) {
-    avisar("Informe a identificação do lote.", "erro");
+    avisar("Informe o lote que será carregado.", "erro");
     lote.focus();
     return;
   }
 
-  const pendentes = volumes.filter(volume =>
-    volume.status === "pendente" &&
-    volume.marketplace === canal &&
-    volume.lote.toUpperCase() === nomeLote.toUpperCase()
+  const pendentes = volumes.filter(v =>
+    v.status === "pendente" &&
+    v.marketplace === canal &&
+    v.lote.toUpperCase() === nomeLote.toUpperCase()
   );
 
   if (pendentes.length === 0) {
-    avisar("Nenhum volume pendente encontrado nesse lote.", "erro");
+    avisar("Não há volumes pendentes nesse lote.", "erro");
     return;
   }
 
   const confirmar = confirm(
     `Marketplace: ${canal}\n` +
     `Lote: ${nomeLote}\n` +
-    `Volumes: ${pendentes.length}\n\n` +
+    `Volumes pendentes: ${pendentes.length}\n\n` +
     "Confirma que TODOS esses volumes foram carregados?"
   );
 
@@ -329,43 +269,31 @@ baixarLote.addEventListener("click", () => {
 
   const agora = new Date().toISOString();
 
-  pendentes.forEach(volume => {
-    volume.status = "carregado";
-    volume.saida = agora;
+  pendentes.forEach(v => {
+    v.status = "carregado";
+    v.saida = agora;
   });
 
-  if (!salvar()) {
-    pendentes.forEach(volume => {
-      volume.status = "pendente";
-      volume.saida = null;
-    });
-    return;
-  }
-
+  salvar();
   desenhar();
-  avisar(
-    `✓ ${pendentes.length} volumes baixados do lote.`,
-    "sucesso"
-  );
+  avisar(`${pendentes.length} volumes baixados do lote.`, "sucesso");
 });
 
 async function pararCamera() {
-  const leitor = scanner;
+  if (scanner) {
+    const atual = scanner;
+    scanner = null;
 
-  scanner = null;
-  cameraAtiva = false;
-
-  if (leitor) {
     try {
-      await leitor.stop();
+      await atual.stop();
     } catch (erro) {
-      console.warn("A câmera já estava parada:", erro);
+      console.warn("A câmera já estava parada.", erro);
     }
 
     try {
-      await leitor.clear();
+      await atual.clear();
     } catch (erro) {
-      console.warn("Limpeza do leitor:", erro);
+      console.warn("Não foi necessário limpar o leitor.", erro);
     }
   }
 
@@ -376,75 +304,59 @@ async function pararCamera() {
 }
 
 abrirCamera.addEventListener("click", async () => {
-  if (iniciandoCamera || cameraAtiva) return;
+  if (iniciandoCamera || scanner) return;
 
   if (!lote.value.trim()) {
-    avisar("Informe o lote antes de abrir a câmera.", "erro");
+    avisar("Informe o lote antes de ativar a câmera.", "erro");
     lote.focus();
     return;
   }
 
   if (!window.Html5Qrcode) {
-    avisar(
-      "O leitor não carregou. Verifique a conexão com a internet.",
-      "erro"
-    );
+    avisar("Biblioteca de leitura não carregada. Confira a internet.", "erro");
     return;
   }
 
   iniciandoCamera = true;
   abrirCamera.disabled = true;
   areaCamera.hidden = false;
-
-  avisar("Solicitando acesso à câmera...");
+  avisar("Iniciando câmera...", "neutro");
 
   try {
-    const leitor = new Html5Qrcode("leitor-camera", {
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.CODE_93,
-        Html5QrcodeSupportedFormats.CODABAR,
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.ITF,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.QR_CODE
-      ],
-      verbose: false
-    });
+    scanner = new Html5Qrcode("leitor-camera");
 
-    scanner = leitor;
-
-    await leitor.start(
+    await scanner.start(
       { facingMode: "environment" },
       {
-        fps: 15,
-        aspectRatio: 1.777778
+        fps: 10,
+        qrbox: { width: 280, height: 130 },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
       },
-      codigo => {
-        processarLeitura(codigo);
+      texto => {
+        // Registra o código e mantém a câmera ativa.
+        processarLeitura(texto);
       },
       () => {
-        // É normal não encontrar um código em todos os quadros.
+        // Leituras não reconhecidas são normais durante a busca.
       }
     );
 
-    cameraAtiva = true;
     iniciandoCamera = false;
-
-    avisar(
-      "Câmera ativa. Aponte para o código de barras; o registro é automático.",
-      "sucesso"
-    );
+    avisar("Câmera ativa. Aponte para a próxima etiqueta.", "sucesso");
   } catch (erro) {
-    console.error("Erro ao iniciar a câmera:", erro);
-
+    console.error("Falha ao abrir a câmera:", erro);
     await pararCamera();
-
     avisar(
-      "Não foi possível iniciar a câmera. Confira a permissão do Safari e tente novamente.",
+      "Não foi possível abrir a câmera. Confira as permissões do navegador.",
       "erro"
     );
   }
@@ -452,12 +364,240 @@ abrirCamera.addEventListener("click", async () => {
 
 fecharCamera.addEventListener("click", pararCamera);
 
-document.addEventListener("visibilitychange", () => {
-  if (document.hidden && scanner) {
-    pararCamera();
+window.addEventListener("beforeunload", () => {
+  if (scanner) {
+    scanner.stop().catch(() => {});
   }
 });
 
-// Inicialização: mantém os registros já existentes.
+salvar();
 desenhar();
 atualizarOperacao();
+
+
+// ==========================================
+// PORTAL DE COLETA - CONEXÃO SUPABASE
+// ==========================================
+
+const SUPABASE_URL = "https://oppsnjqnctbalzsqrbnv.supabase.co";
+
+const SUPABASE_KEY = "sb_publishable_U9y7jGfxtpd7xapMUwX6Xg_oNGl3dDW";
+
+const supabaseClient = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_KEY
+);
+
+const areaLogin = document.getElementById("areaLogin");
+const areaAdmin = document.getElementById("areaAdmin");
+const emailAdmin = document.getElementById("emailAdmin");
+const senhaAdmin = document.getElementById("senhaAdmin");
+const entrarAdmin = document.getElementById("entrarAdmin");
+const sairAdmin = document.getElementById("sairAdmin");
+const compartilharLote = document.getElementById("compartilharLote");
+const linkGerado = document.getElementById("linkGerado");
+const statusAdmin = document.getElementById("statusAdmin");
+
+// Verificar login
+async function atualizarPainelAdmin() {
+  const { data, error } = await supabaseClient.auth.getSession();
+
+  if (error) {
+    statusAdmin.textContent = "Erro ao verificar login.";
+    return;
+  }
+
+  const sessao = data.session;
+
+  areaLogin.hidden = Boolean(sessao);
+  areaAdmin.hidden = !sessao;
+
+  if (sessao) {
+    statusAdmin.textContent =
+      "Conectado como " + sessao.user.email;
+
+    listarCompartilhamentos();
+  }
+}
+
+// Entrar
+entrarAdmin.addEventListener("click", async () => {
+  const email = emailAdmin.value.trim();
+  const senha = senhaAdmin.value;
+
+  if (!email || !senha) {
+    alert("Informe e-mail e senha.");
+    return;
+  }
+
+  entrarAdmin.disabled = true;
+
+  const { error } = await supabaseClient.auth.signInWithPassword({
+    email,
+    password: senha
+  });
+
+  entrarAdmin.disabled = false;
+
+  if (error) {
+    alert("Erro no login. Confira seus dados.");
+    console.error(error);
+    return;
+  }
+
+  senhaAdmin.value = "";
+  atualizarPainelAdmin();
+});
+
+// Sair
+sairAdmin.addEventListener("click", async () => {
+  await supabaseClient.auth.signOut();
+  linkGerado.hidden = true;
+  atualizarPainelAdmin();
+});
+
+// Compartilhar lote
+compartilharLote.addEventListener("click", async () => {
+  const nomeLote = lote.value.trim();
+  const canal = marketplace.value;
+
+  if (!nomeLote) {
+    alert("Informe o nome do lote.");
+    return;
+  }
+
+  const codigos = volumes
+    .filter(v =>
+      v.marketplace === canal &&
+      v.lote.toUpperCase() === nomeLote.toUpperCase()
+    )
+    .map(v => v.codigo);
+
+  const codigosUnicos = [...new Set(codigos)];
+
+  if (!codigosUnicos.length) {
+    alert("Nenhum volume encontrado nesse lote.");
+    return;
+  }
+
+  const { data: sessaoData } =
+    await supabaseClient.auth.getSession();
+
+  if (!sessaoData.session) {
+    alert("Faça login novamente.");
+    return;
+  }
+
+  compartilharLote.disabled = true;
+
+  const { data, error } = await supabaseClient
+    .from("lotes_compartilhados")
+    .insert({
+      owner_id: sessaoData.session.user.id,
+      marketplace: canal,
+      nome_lote: nomeLote,
+      codigos: codigosUnicos,
+      ativo: true
+    })
+    .select("token")
+    .single();
+
+  compartilharLote.disabled = false;
+
+  if (error) {
+    console.error(error);
+    alert("Erro ao criar compartilhamento.");
+    return;
+  }
+
+  const url = new URL("portal-coleta.html", location.href);
+  url.searchParams.set("token", data.token);
+
+  linkGerado.hidden = false;
+  linkGerado.innerHTML = "";
+
+  const texto = document.createElement("p");
+  texto.textContent = "Link criado para " + nomeLote;
+
+  const campo = document.createElement("input");
+  campo.value = url.href;
+  campo.readOnly = true;
+
+  const copiar = document.createElement("button");
+  copiar.type = "button";
+  copiar.className = "btn-camera";
+  copiar.textContent = "Copiar link";
+
+  copiar.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(url.href);
+    copiar.textContent = "Link copiado!";
+  });
+
+  linkGerado.append(texto, campo, copiar);
+
+  listarCompartilhamentos();
+});
+
+// Listar e revogar links
+async function listarCompartilhamentos() {
+  let painel = document.getElementById("listaCompartilhamentos");
+
+  if (!painel) {
+    painel = document.createElement("div");
+    painel.id = "listaCompartilhamentos";
+    areaAdmin.appendChild(painel);
+  }
+
+  const { data, error } = await supabaseClient
+    .from("lotes_compartilhados")
+    .select("id, marketplace, nome_lote, ativo")
+    .order("criado_em", { ascending: false });
+
+  if (error) {
+    painel.textContent = "Erro ao carregar links.";
+    console.error(error);
+    return;
+  }
+
+  painel.innerHTML = "<h3>Links de coleta</h3>";
+
+  data.forEach(item => {
+    const bloco = document.createElement("div");
+    const texto = document.createElement("p");
+
+    texto.textContent =
+      item.marketplace + " - " + item.nome_lote +
+      (item.ativo ? " - ATIVO" : " - REVOGADO");
+
+    bloco.appendChild(texto);
+
+    if (item.ativo) {
+      const botao = document.createElement("button");
+      botao.type = "button";
+      botao.className = "btn-secundario";
+      botao.textContent = "Revogar link";
+
+      botao.addEventListener("click", async () => {
+        if (!confirm("Deseja revogar este link?")) return;
+
+        const { error } = await supabaseClient
+          .from("lotes_compartilhados")
+          .update({ ativo: false })
+          .eq("id", item.id);
+
+        if (error) {
+          alert("Erro ao revogar.");
+          return;
+        }
+
+        listarCompartilhamentos();
+      });
+
+      bloco.appendChild(botao);
+    }
+
+    painel.appendChild(bloco);
+  });
+}
+
+atualizarPainelAdmin();
